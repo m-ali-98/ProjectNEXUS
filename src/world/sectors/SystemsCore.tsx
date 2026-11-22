@@ -14,6 +14,7 @@ import { SYSTEM_NODE_RADIUS, systemNodeLocalPosition } from "@/world/sectorData"
 import { useQuality } from "@/lib/quality";
 import { Text } from "@/world/environment/Text3D";
 import { LimitedLights } from "@/world/environment/Lighting";
+import { useNexusStore } from "@/stores/nexusStore";
 
 const LAYER_COLOR: Record<string, string> = {
   client: "#46e6ff",
@@ -28,6 +29,13 @@ function SystemGraph() {
   const nodesRef = useRef<THREE.Group>(null);
   const pulseRef = useRef<THREE.Group>(null);
 
+  // Selecting a node — by opening its panel or by focusing its console — lights
+  // up every edge it participates in.
+  const openNode = useNexusStore((s) => (s.panel?.kind === "systemNode" ? s.panel.id : null));
+  const focused = useNexusStore((s) => s.focused);
+  const focusedNode = focused?.id.startsWith("sys-node-") ? focused.id.slice("sys-node-".length) : null;
+  const activeNode = openNode ?? focusedNode;
+
   const positions = useMemo(
     () =>
       systemNodes.map((_, i) => {
@@ -39,7 +47,14 @@ function SystemGraph() {
 
   const edges = useMemo(() => {
     const seen = new Set<string>();
-    const list: { key: string; a: THREE.Vector3; b: THREE.Vector3; strong: boolean }[] = [];
+    const list: {
+      key: string;
+      a: THREE.Vector3;
+      b: THREE.Vector3;
+      strong: boolean;
+      aId: string;
+      bId: string;
+    }[] = [];
     systemNodes.forEach((node, i) => {
       node.connections.forEach((target) => {
         const j = systemNodes.findIndex((n) => n.id === target);
@@ -50,7 +65,14 @@ function SystemGraph() {
         // Only draw links between adjacent ring positions to avoid a hairball.
         const diff = Math.min(Math.abs(i - j), systemNodes.length - Math.abs(i - j));
         if (diff > 2) return;
-        list.push({ key, a: positions[i].vec, b: positions[j].vec, strong: diff === 1 });
+        list.push({
+          key,
+          a: positions[i].vec,
+          b: positions[j].vec,
+          strong: diff === 1,
+          aId: systemNodes[i].id,
+          bId: systemNodes[j].id,
+        });
       });
     });
     return list;
@@ -80,14 +102,16 @@ function SystemGraph() {
         {systemNodes.map((node, i) => {
           const p = systemNodeLocalPosition(i, systemNodes.length);
           const color = LAYER_COLOR[node.layer] ?? "#46e6ff";
+          const active = activeNode === node.id;
+          const dimmed = !!activeNode && !active;
           return (
-            <group key={node.id} position={[p.x, p.y, p.z]}>
+            <group key={node.id} position={[p.x, p.y, p.z]} scale={active ? 1.18 : 1}>
               <mesh>
                 <sphereGeometry args={[0.2, 20, 20]} />
                 <meshStandardMaterial
                   color="#061014"
                   emissive={color}
-                  emissiveIntensity={2.4}
+                  emissiveIntensity={active ? 4.2 : dimmed ? 1.1 : 2.4}
                   roughness={0.25}
                   metalness={0.4}
                   toneMapped={false}
@@ -98,15 +122,20 @@ function SystemGraph() {
                 <meshBasicMaterial
                   color={color}
                   transparent
-                  opacity={0.09}
+                  opacity={active ? 0.24 : dimmed ? 0.04 : 0.09}
                   blending={THREE.AdditiveBlending}
                   depthWrite={false}
                   toneMapped={false}
                 />
               </mesh>
               <mesh rotation={[Math.PI / 2.2, i * 0.5, 0]}>
-                <torusGeometry args={[0.42, 0.008, 4, 48]} />
-                <meshBasicMaterial color={color} transparent opacity={0.6} toneMapped={false} />
+                <torusGeometry args={[active ? 0.56 : 0.42, 0.008, 4, 48]} />
+                <meshBasicMaterial
+                  color={color}
+                  transparent
+                  opacity={active ? 0.95 : dimmed ? 0.22 : 0.6}
+                  toneMapped={false}
+                />
               </mesh>
               <Billboard>
                 <Text
@@ -139,38 +168,42 @@ function SystemGraph() {
         })}
       </group>
 
-      {/* links */}
-      {edges.map((edge) => (
-        <Line
-          key={edge.key}
-          points={[
-            [edge.a.x, edge.a.y, edge.a.z],
-            [edge.b.x, edge.b.y, edge.b.z],
-          ]}
-          color="#5aa8ff"
-          lineWidth={edge.strong ? 1.2 : 0.8}
-          transparent
-          opacity={edge.strong ? 0.42 : 0.2}
-        />
-      ))}
+      {/* links — the selected node's edges light up, the rest recede */}
+      {edges.map((edge) => {
+        const connected = !activeNode || edge.aId === activeNode || edge.bId === activeNode;
+        const highlighted = !!activeNode && connected;
+        return (
+          <Line
+            key={edge.key}
+            points={[
+              [edge.a.x, edge.a.y, edge.a.z],
+              [edge.b.x, edge.b.y, edge.b.z],
+            ]}
+            color={highlighted ? "#a8f0ff" : activeNode ? "#20353f" : "#5aa8ff"}
+            lineWidth={highlighted ? 1.8 : edge.strong ? 1.2 : 0.8}
+            transparent
+            opacity={highlighted ? 0.95 : activeNode ? 0.18 : edge.strong ? 0.42 : 0.2}
+          />
+        );
+      })}
 
-      {/* animated data flow on the strongest links */}
+      {/* animated data flow — follows the selection when there is one */}
       {quality.id !== "performance" &&
-        edges
-          .filter((e) => e.strong)
-          .slice(0, 6)
-          .map((edge, i) => (
-            <EnergyConduit
-              key={`flow-${edge.key}`}
-              from={edge.a}
-              to={edge.b}
-              accent="blue"
-              thickness={0.008}
-              pulses={1}
-              speed={0.24}
-              offset={i * 0.17}
-            />
-          ))}
+        (activeNode
+          ? edges.filter((e) => e.aId === activeNode || e.bId === activeNode)
+          : edges.filter((e) => e.strong).slice(0, 6)
+        ).map((edge, i) => (
+          <EnergyConduit
+            key={`flow-${edge.key}`}
+            from={edge.a}
+            to={edge.b}
+            accent="blue"
+            thickness={activeNode ? 0.014 : 0.008}
+            pulses={activeNode ? 2 : 1}
+            speed={activeNode ? 0.42 : 0.24}
+            offset={i * 0.17}
+          />
+        ))}
 
       {/* rotating structural rings above the graph */}
       <group ref={pulseRef}>

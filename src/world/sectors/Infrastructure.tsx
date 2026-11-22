@@ -13,6 +13,7 @@ import { pipelineStages } from "@/content/infrastructure";
 import { useQuality } from "@/lib/quality";
 import { Text } from "@/world/environment/Text3D";
 import { LimitedLights } from "@/world/environment/Lighting";
+import { useNexusStore } from "@/stores/nexusStore";
 
 function Beacon() {
   const ref = useRef<THREE.Group>(null);
@@ -101,6 +102,9 @@ function RackRowMarkings() {
 
 export function Infrastructure() {
   const quality = useQuality();
+  const openStage = useNexusStore((s) => (s.panel?.kind === "pipeline" ? s.panel.id : null));
+  const focusedId = useNexusStore((s) => s.focused?.id ?? null);
+  const activeStage = openStage ?? (focusedId?.startsWith("inf-stage-") ? focusedId : null);
   const pylonPositions = useMemo(
     () => pipelineStages.map((stage, i) => ({ stage, z: -8 + i * 4 })),
     [],
@@ -116,7 +120,13 @@ export function Infrastructure() {
       {/* deployment pipeline pylons + floor conduits */}
       {pylonPositions.map(({ stage, z }) => (
         <group key={stage.id} position={[0, 0, z]}>
-          <PipelinePylon index={stage.index} label={stage.label} code={stage.label} accent="amber" />
+          <PipelinePylon
+            index={stage.index}
+            label={stage.label}
+            code={stage.code}
+            accent="amber"
+            active={activeStage === stage.id}
+          />
           <Text
             font={FONT_MONO}
             fontSize={0.085}
@@ -138,9 +148,9 @@ export function Infrastructure() {
               from={new THREE.Vector3(0, floorY, z + 0.9)}
               to={new THREE.Vector3(0, floorY, next.z - 0.9)}
               accent="amber"
-              thickness={0.03}
-              pulses={2}
-              speed={0.32}
+              thickness={activeStage === stage.id || activeStage === next.stage.id ? 0.05 : 0.03}
+              pulses={activeStage === stage.id || activeStage === next.stage.id ? 3 : 2}
+              speed={activeStage ? 0.5 : 0.32}
               offset={i * 0.2}
             />
           </group>

@@ -289,11 +289,13 @@ export function PipelinePylon({
   label = "",
   code = "",
   accent = "amber",
+  active = false,
 }: {
   index?: number;
   label?: string;
   code?: string;
   accent?: Accent;
+  active?: boolean;
 }) {
   const shadow = useShadow();
   const tex = useMemo(() => screenTexture("pipeline", ACCENT_HEX[accent]), [accent]);
@@ -320,8 +322,24 @@ export function PipelinePylon({
       </group>
       <mesh position={[0, 0.16, 0.77]}>
         <boxGeometry args={[1.4, 0.03, 0.03]} />
-        <primitive object={M().accentMat(accent, 2.0)} attach="material" />
+        <primitive object={M().accentMat(accent, active ? 3.4 : 2.0)} attach="material" />
       </mesh>
+      {/* selection ring: marks the stage whose panel is open */}
+      {active && (
+        <>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.035, 0]}>
+            <ringGeometry args={[1.05, 1.18, 48]} />
+            <meshBasicMaterial
+              color={ACCENT_HEX[accent]}
+              transparent
+              opacity={0.75}
+              toneMapped={false}
+              side={THREE.DoubleSide}
+            />
+          </mesh>
+          <pointLight position={[0, 1.2, 0]} intensity={6} distance={4.5} color={ACCENT_HEX[accent]} decay={2} />
+        </>
+      )}
       {/* stage number */}
       <Text
         font={FONT_DISPLAY}
