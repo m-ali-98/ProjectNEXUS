@@ -32,8 +32,8 @@ export const BODY = {
   wrist: 0.026,
 
   // widths
-  hipHalfWidth: 0.078,
-  shoulderHalfWidth: 0.175,
+  hipHalfWidth: 0.062,
+  shoulderHalfWidth: 0.198,
   footLength: 0.235,
   footWidth: 0.078,
 
@@ -75,18 +75,23 @@ export const CHARACTER_HEIGHT = BODY.crown + 0.09; // hair volume above the crow
  * the floor exactly when the leg is straight.
  */
 export const SHOE_PROFILE: [z: number, y: number][] = [
-  [0.055, 0.105],
-  [0.064, 0.03],
-  [0.05, -0.072],
-  [0.02, -0.106],
+  [0.046, 0.018],
+  [0.056, -0.012],
+  [0.054, -0.05],
+  [0.04, -0.082],
+  [0.012, -0.102],
+  [-0.024, -0.112],
   [-0.06, -HEEL_LIFT],
-  [-0.13, -0.104],
-  [-0.185, -0.072],
-  [-0.205, -0.048],
-  [-0.188, -0.026],
-  [-0.11, 0.006],
-  [-0.055, 0.062],
-  [-0.004, 0.094],
+  [-0.105, -0.11],
+  [-0.155, -0.1],
+  [-0.19, -0.086],
+  [-0.205, -0.068],
+  [-0.192, -0.05],
+  [-0.15, -0.034],
+  [-0.095, -0.022],
+  [-0.05, -0.008],
+  [-0.018, 0.004],
+  [0.014, 0.012],
 ];
 
 /** Ball-of-foot contact point used by the ground solve. */

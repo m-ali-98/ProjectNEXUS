@@ -39,7 +39,7 @@ src/
     environment/        procedural textures/materials, architecture, fixtures, effects
     sectors/            7 room components + shared room shell + holographic core
     player/             pointer lock, player state, third-person controller
-    character/          procedural protagonist: data, pose solver, materials, head, body, rig
+    character/          procedural protagonist: data, pose solver, materials, geometry/*, rig, Character
     camera/             thirdPerson boom, shot director, cinematics, intro camera
     interactions/       interaction registry, focus raycasts, in-world markers
     effects/PostFX.tsx  quality-gated SSAO/bloom/grade/aberration/vignette/grain

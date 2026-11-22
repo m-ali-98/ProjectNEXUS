@@ -87,15 +87,21 @@ live label, sector banner, toast, tour caption, mobile controls and the WebGL fa
 
 Replays the character's forward kinematics over idle, walk, run and sprint cycles and
 asserts the footwear actually plants: no sole sinks more than 2 cm below the floor, the
-swing foot clears it, and the crown height matches `characterData.ts`. It shares the real
-`SHOE_PROFILE`/`SOLE_CONTACT` numbers with `Body.tsx`, so mesh and measurement cannot drift.
+swing foot clears it, and the crown height matches `characterData.ts`. It then walks the
+real rig geometry (the same meshes the renderer mounts) and checks that every vertex is
+finite and inside its joint's bounds, that the two sides are mirrored within 2 mm, and that
+the stiletto tip reaches y = 0.
+
+`scripts/preview-character.ts` is the visual counterpart: it rasterises the same rig with a
+software renderer into `preview/*.png`, which is how the model is inspected in an
+environment with no GPU.
 
 ```bash
 npx tsx scripts/validate-character.ts
 ```
 
 Current result: errors 0 — deepest sole −0.017 m (sprint), swing clearance 0.436 m,
-crown 1.756 m.
+crown 1.756 m, 57 rig parts / 23 803 vertices all finite, stiletto tip at 0.000 m.
 
 ## What is not automated
 

@@ -15,6 +15,7 @@
 import * as THREE from "three";
 import { BODY, HEEL_LIFT, SHOE_PROFILE, SOLE_CONTACT } from "../src/world/character/characterData";
 import { computePose, gaitPhase, type Pose, type PoseInputs } from "../src/world/character/characterPose";
+import { rigParts } from "../src/world/character/rig";
 
 const errors: string[] = [];
 const warnings: string[] = [];
@@ -165,6 +166,85 @@ if (!Number.isFinite(turnPose.hips.rotZ) || Math.abs(turnPose.hips.rotZ) > 0.4) 
   errors.push("turning lean is outside a believable range");
 }
 
+
+/* -------------------------------------------------------------------------- */
+/* Rig geometry                                                               */
+/* -------------------------------------------------------------------------- */
+
+
+/**
+ * The geometry is built by the same code the renderer uses, so it can be checked
+ * headlessly: finite vertices, plausible bounds, left/right symmetry and the
+ * shoe actually reaching the floor at the heel lift.
+ */
+function validateRigGeometry() {
+  const parts = rigParts();
+  const box = new THREE.Box3();
+  const point = new THREE.Vector3();
+  let vertices = 0;
+  let bad = 0;
+
+  for (const { part } of parts) {
+    const position = part.geometry.getAttribute("position");
+    vertices += position.count;
+    for (let i = 0; i < position.count; i++) {
+      point.fromBufferAttribute(position, i);
+      if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || !Number.isFinite(point.z)) {
+        bad++;
+      }
+      // parts are built in their joint's local space, so only sanity-bound them
+      if (Math.abs(point.x) > 0.4 || Math.abs(point.y) > 0.6 || Math.abs(point.z) > 0.4) bad++;
+      box.expandByPoint(point);
+    }
+  }
+
+  note(`rig: ${parts.length} parts, ${vertices.toLocaleString()} vertices`);
+  if (bad > 0) errors.push(`rig: ${bad} non-finite or out-of-bounds vertices`);
+  else note(`rig: all ${vertices.toLocaleString()} vertices finite and in bounds`);
+
+  // The shoe must reach the floor at exactly the heel lift.
+  const shoe = parts.find(({ part }) => part.key.startsWith("shoe-"));
+  const stiletto = parts.find(({ part }) => part.key.startsWith("stiletto-"));
+  if (!shoe || !stiletto) {
+    errors.push("rig: shoe geometry missing");
+    return;
+  }
+  const shoeBox = new THREE.Box3().setFromBufferAttribute(
+    shoe.part.geometry.getAttribute("position") as THREE.BufferAttribute,
+  );
+  const stilettoBox = new THREE.Box3().setFromBufferAttribute(
+    stiletto.part.geometry.getAttribute("position") as THREE.BufferAttribute,
+  );
+  note(
+    `rig: shoe spans z ${shoeBox.min.z.toFixed(3)}…${shoeBox.max.z.toFixed(3)}, ` +
+      `heel tip y ${(BODY.ankle + stilettoBox.min.y).toFixed(3)}`,
+  );
+  if (Math.abs(BODY.ankle + stilettoBox.min.y) > 0.004) {
+    errors.push(`rig: stiletto tip is ${(BODY.ankle + stilettoBox.min.y).toFixed(3)} m above the floor`);
+  }
+  if (Math.abs(BODY.ankle + shoeBox.min.y) > 0.005) {
+    errors.push(`rig: shoe sole is not on the floor (${(BODY.ankle + shoeBox.min.y).toFixed(3)} m)`);
+  }
+
+  // left/right symmetry of the limbs
+  const left = parts.find(({ part }) => part.key === "upperArm-1");
+  const right = parts.find(({ part }) => part.key === "upperArm--1");
+  if (left && right) {
+    const a = new THREE.Box3().setFromBufferAttribute(
+      left.part.geometry.getAttribute("position") as THREE.BufferAttribute,
+    );
+    const b = new THREE.Box3().setFromBufferAttribute(
+      right.part.geometry.getAttribute("position") as THREE.BufferAttribute,
+    );
+    if (Math.abs(a.max.x + b.min.x) > 0.002 || Math.abs(a.max.y - b.max.y) > 0.002) {
+      errors.push("rig: arms are not mirrored");
+    } else {
+      note("rig: limbs are mirrored within 2 mm");
+    }
+  }
+}
+
+validateRigGeometry();
 console.log(`errors: ${errors.length}`);
 errors.forEach((e) => console.log(`  ✗ ${e}`));
 warnings.forEach((w) => console.log(`  ! ${w}`));

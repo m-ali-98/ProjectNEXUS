@@ -1,105 +1,98 @@
 # 07 — Character & camera
 
-The protagonist is generated entirely in code: no rigged meshes, no texture files, no
+The protagonist is generated entirely in code: no rigged mesh, no texture files, no
 downloads. Everything from the profile of her heel to the pore-level normal on her skin is
-built by `src/world/character/*`, which means the avatar is a first-class part of the
-codebase and is verified like any other system.
+built by `src/world/character/*`, which means the avatar is part of the codebase and is
+verified like any other system.
 
-## Why procedural
+## How the model is built
 
-The project ships without binary art (see [03 — Asset pipeline](03-assets.md)). A rigged
-GLB would have been the shortcut, but it would have added a multi-megabyte asset, a
-licence question and a loading state to a page whose whole premise is "everything here is
-the author's own work". A parametric figure also lets the pose solver reason about the
-exact same numbers the geometry uses, which is what makes the feet stay on the floor.
+An earlier version assembled the figure from cylinders and spheres. It looked exactly like
+what it was: a mannequin. The current model is **lofted and sculpted** instead.
 
-## Module map
-
-| File | Responsibility |
+| Layer | What it does |
 | --- | --- |
-| `characterData.ts` | Landmarks, torso lathe profile, suit seam rings, shoe profile, `HEEL_LIFT`, `CHARACTER_HEIGHT` |
-| `characterPose.ts` | Pure FK solver: pose in → joint angles out, plus the sole-contact ground solve |
-| `characterMaterials.ts` | The PBR set: skin, suit, suit panels, edges, hair, sclera/iris/cornea, lips, leather, metal |
-| `Head.tsx` | Skull, face volumes, eyes with cornea, brow, lips, and the swingable hair mass |
-| `Body.tsx` | Torso lathe, bust/back volumes, seams, belt, collar, yoke, back zip, arms, hands, legs, heels |
-| `Character.tsx` | The rig: refs per joint, pose blending, follow, turn-to-velocity, blob shadow, practical lights |
+| `geometry/surface.ts` | The toolkit: `loft` (superellipse cross-sections), `loftZ` (front-to-back lasts), `sculpt` (Gaussian inflations along normals), `groove` (hair and fabric ribs), `tube` (strands, brows, lashes), `cutFaces` (vamp openings, face windows), `mirrorX`, `merge` |
+| `geometry/body.ts` | Torso, neck, arms, hands, legs, shoe last, sole, stiletto, strap |
+| `geometry/head.ts` | Skull + face field, eye lens and lids, brows, lips, ears, hair cap with a real hairline, back mass, side pieces |
+| `rig.ts` | The declarative skeleton: joint nodes with local offsets and the meshes bound to material keys |
+| `characterPose.ts` | Pure pose solver and the sole-contact ground solve |
+| `Character.tsx` | Walks the rig tree, registers a group per joint, blends the pose at 14/s |
 
-## The figure
+Nothing intersects anything else by accident: the eyes are shallow lenses sitting on a
+recessed socket with skin patches for lids, the lips are small domes that follow the mouth
+surface, and the hair shell is cut away over the face so it can never cover the eyes.
 
-- **Proportions.** Crown at 1.755 m, hip joint at 0.905 m, shoulder joints at 1.435 m —
-  fashion-illustration proportions (long legs, narrow waist, 0.168 m shoulder half-width)
-  rather than a neutral mannequin.
-- **Torso.** A lathe over a 26-point profile, scaled 2× from the profile units so the
-  surface passes through the hips, waist, ribcage and shoulder line; bust and back
-  volumes, `SUIT_SEAMS` rings at the waist, ribs and hips, a belt, a yoke and a back zip.
-- **Limbs.** Thigh radius narrows 0.082 → 0.058 m down the leg, shin tapers into the
-  ankle at 0.115 m above the floor (the heel lift). Arms are shoulder → elbow 0.29 m →
-  wrist 0.26 m.
-- **Hands.** A palm plus four two-segment fingers and an opposed thumb — enough to read
-  as hands at gameplay distance without a rigged hand.
-- **Head.** Skull, cheekbones and jaw volumes, eye sockets with sclera/iris/pupil/cornea,
-  brows, lips, and a hair mass that swings (the `hairSwing` joint is driven by speed).
-- **Heels.** One `SHOE_PROFILE` outline in ankle space — sole line, arch, stiletto tip —
-  extruded sideways and rotated into place, plus a sole plate and accent strip. The same
-  profile is what the validator grounds against, so the mesh and the physics can't drift.
+## Anatomy, in numbers
+
+- Crown 1.755 m, chin 1.545 m, hip joint 0.905 m, knee 0.505 m, ankle 0.115 m.
+- Shoulder joints 0.128 m either side; hips 0.062 m.
+- Torso sections run from the crotch (−0.138 above the hip joint) to the neck base (+0.566),
+  with the bust, glutes, shoulder blades, collarbone hollow and trapezius sculpted into the
+  same surface.
+- Thigh 0.4 m, shin 0.39 m, upper arm 0.29 m, forearm 0.26 m.
+- Hands: lofted palm plus four two-phalange fingers and an opposed thumb.
+- Shoes: a pump last lofted from heel counter to pointed toe with the vamp cut out, a thin
+  sole edge and a curved stiletto whose tip lands exactly on y = 0.
+
+## Seeing the model without a GPU
+
+`scripts/preview-character.ts` walks the same rig with matrices and rasterises it with a
+z-buffered software renderer, writing front, three-quarter, side and two face views to
+`preview/`:
+
+```bash
+npx tsx scripts/preview-character.ts           # writes preview/*.png
+```
+
+This exists because the build environment has no GPU or browser: without it, silhouette
+problems (spikes at joints, floating trim, a hair shell across the eyes) were invisible
+until someone opened the site. It is a reference image, not the shipping renderer.
 
 ## Pose and grounding
 
-`characterPose.ts` is pure: given `{ speed, run, turn, phase, airtime }` it returns joint
-angles for a named joint record, which `Character.tsx` applies with an `"YXZ"` rotation
-order at a 14/s blend so state changes read as weight, not snapping.
+`characterPose.ts` is pure: given `{ speed, run, turn, phase }` it returns joint angles,
+which `Character.tsx` applies with `"YXZ"` order and a 14/s blend so state changes read as
+weight rather than snapping.
 
-Grounding is solved, not faked. For every frame the solver walks the chain
-thigh → knee → ankle → sole contact point for both legs, finds the lowest sole vertex,
-and drops the pelvis so that point sits at `y = 0`. `scripts/validate-character.ts` runs
-the same FK over idle/walk/run/sprint cycles and asserts:
+Grounding is solved, not faked. Every frame the solver walks thigh → knee → ankle → sole
+contact for both legs and drops the pelvis so the lowest sole sits at y = 0.
+`scripts/validate-character.ts` steps the same forward kinematics over idle, walk, run and
+sprint and asserts that:
 
-- no sole ever sinks more than 2 cm below the floor (measured idle −0.005 m … sprint
-  −0.017 m);
-- the swing foot clears the floor by ≥ 0.1 m (0.436 m at sprint);
-- the crown stays at the documented height.
+- no sole sinks more than 2 cm below the floor (idle −0.005 m … sprint −0.017 m);
+- the swing foot clears the floor (0.436 m at sprint);
+- the crown stays at the documented height;
+- every rig vertex is finite and inside its joint's bounds, both limbs are mirrored within
+  2 mm, and the stiletto tip lands on the floor.
 
-Run it with `npx tsx scripts/validate-character.ts`.
+```bash
+npx tsx scripts/validate-character.ts
+```
 
 ## Third-person boom
 
-`camera/thirdPerson.ts` is the whole camera:
+`camera/thirdPerson.ts`: pivot 1.5 m up and 0.32 m to her right, 3.25 m back (min 0.85 m),
+aimed 9 m along the view direction, pitch clamped to −0.62 … 0.98 rad. A 12-step probe
+against the real colliders shortens the arm when geometry is behind her and keeps 0.32 m of
+floor clearance. `PlayerController` eases toward the solved pose; `releaseCamera()` returns
+the director's camera to the same boom.
 
-- pivot 1.5 m above her feet, offset 0.32 m to her right shoulder;
-- arm length 3.25 m (min 0.85 m), aimed 9 m along the view direction;
-- pitch clamp −0.62 … 0.98 rad;
-- 12-step probe against `resolveCollisions` shortens the arm when geometry is behind her,
-  and the solved position keeps 0.32 m of floor clearance.
+The character turns toward her velocity when moving and toward the camera yaw when idle.
 
-`PlayerController` eases the live camera toward that pose (faster when the arm is already
-short), so collision changes read as a smooth pull-in rather than a cut. When a panel is
-focused the director owns the camera instead; on close, `releaseCamera()` returns it to
-the boom.
+## Shading
 
-The character turns toward her velocity when moving and toward the camera yaw when idle,
-which is what keeps a keyboard-only player looking where the camera is looking.
+- `MeshPhysicalMaterial` throughout: clearcoat suit with a woven normal map, sheen on the
+  skin, leather uppers, a metal stiletto and a glossy cornea.
+- The scene's PMREM environment map gives the suit and metal something to reflect.
+- SSAO (ULTRA) anchors her to the floor; bloom picks up the cyan accent strips.
 
-## Render quality
+## Honest limitations
 
-The avatar exists to be looked at, so it carries most of the graphics upgrade:
-
-- **Image-based lighting.** A PMREM-filtered drei `Environment` with lightformers gives
-  the suit, hair and metal something real to reflect; `envMapIntensity` is tuned per
-  material so skin stays matte while the leather and the chrome heel ring read wet.
-- **Clearcoat and sheen.** The suit is a dark technical textile (clearcoat 0.72, sheen
-  0.5) with a woven normal map, so highlights roll along the limbs instead of sitting as
-  a flat specular blob.
-- **Skin relief.** A generated pore-scale normal map plus light sheen and clearcoat
-  breaks up the highlight across the chest, shoulders and face.
-- **Contacts.** A canvas blob shadow under her, two travelling point lights that keep the
-  local key on the figure, and a contact ring that only appears on HIGH/ULTRA.
-- **Post.** SSAO (ULTRA) anchors her to the floor; bloom picks up the suit's cyan accent
-  strips.
-
-## Budget
-
-The figure is ~140 meshes of low-poly primitives sharing 16 materials, with no skinning
-and no per-frame allocations. The only per-quality differences are the contact ring (off
-on PERFORMANCE) and the shadow flags handed down by `useShadow()`; the two short-range
-practical lights stay on every profile because without them she loses her form against
-the fog.
+The figure is a well-formed stylised human, not a scanned or sculpted artist's model. Faces
+are the hardest thing to fake procedurally: hers reads correctly in silhouette and at
+gameplay distance, and is deliberately simple at extreme close range. Importing a rigged
+character (GLB/FBX) would raise the ceiling, but it would also add a binary asset and break
+the project's "everything here is generated" premise — that is an owner decision, not a
+technical one. In the meantime the software preview and the rig validator make every change
+reviewable.

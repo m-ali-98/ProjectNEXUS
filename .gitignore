@@ -9,3 +9,6 @@ dist
 *.tsbuildinfo
 next-env.d.ts
 .vercel
+
+# offline character preview renders (scripts/preview-character.ts)
+preview
