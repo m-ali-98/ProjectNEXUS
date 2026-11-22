@@ -139,6 +139,7 @@ async function main() {
     ["vertex varying", "varying vec3 vRest;"],
     ["vertex rest", "vRest = position;"],
     ["fragment paint", "suitTintAt(vRest)"],
+    ["fragment collar", "collarAt(vRest)"],
     ["fragment trim", "trimAt(vRest)"],
     ["fragment emissive", "totalEmissiveRadiance +="],
   ];

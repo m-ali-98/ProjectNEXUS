@@ -98,8 +98,8 @@ asserts:
 - **suit paint**: the per-vertex mask covers 45–80 % of the mesh (i.e. the suit is painted,
   the head is not);
 - **shader injection**: the material's `onBeforeCompile` is run against three's real
-  `ShaderLib.physical` source and every expected injection is present, with balanced
-  braces. A silently missed replacement would ship an unpainted character, so this is
+  `ShaderLib.physical` source and every expected injection — rest position, paint, collar,
+  trim, emissive — is present, with balanced braces. A silently missed replacement would ship an unpainted character, so this is
   checked rather than assumed.
 
 `scripts/preview-model.ts` is the visual counterpart: it loads the GLB in jsdom, skins it

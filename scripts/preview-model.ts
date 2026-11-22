@@ -73,7 +73,7 @@ async function main() {
   seek(Number(flag("time", "0")));
 
   // ---- suit paint ---------------------------------------------------------
-  const { paintProtagonist, suitTintAt, trimAt, PROTAGONIST } = await import(
+  const { paintProtagonist, suitTintAt, trimAt, collarAt, PROTAGONIST } = await import(
     "../src/world/character/protagonist"
   );
   paintProtagonist(mesh);
@@ -261,7 +261,7 @@ async function main() {
           const rx = tri.ra[0] * w0 + tri.rb[0] * w1 + tri.rc[0] * w2;
           const ry = tri.ra[1] * w0 + tri.rb[1] * w1 + tri.rc[1] * w2;
           const rz = tri.ra[2] * w0 + tri.rb[2] * w1 + tri.rc[2] * w2;
-          const suit = smoothstep(0.26, 0.74, suited);
+          const suit = Math.max(smoothstep(0.26, 0.74, suited), collarAt(rx, ry, rz));
           const trim = trimAt(rx, ry, rz);
           suitTintAt(rx, ry, tint);
           const suitColour: Vec3 = [tint.r, tint.g, tint.b];

@@ -41,10 +41,14 @@ She ships in gym clothes, and importing a second outfit would double the downloa
 the suit is painted inside the asset's own `MeshPhysicalMaterial` (`createSuitMaterial`):
 
 - **Which vertices are suit** comes from a per-vertex mask: skin is whatever the head and
-  neck bones drive, so the collar follows the anatomy and bends with the neck. Raw scanned
-  weights are noisy, so the mask is Laplacian-smoothed over the mesh graph before it is
-  used; the fragment shader then fades between skin and suit across a wide range so the
-  boundary has no triangle stair-step to show.
+  neck bones drive. Raw scanned weights are noisy, so the mask is Laplacian-smoothed over
+  the mesh graph before it is used, and the fragment shader fades between skin and suit
+  across a wide range so the mask boundary has no triangle stair-step to show.
+- **The collar is analytic** (`collarAt`): a cut across rest space at y ≈ 1.40 m, with a
+  soft top edge and a small pull-back at the back of the neck so the nape hair stays hair.
+  A mask boundary can only be resolved at vertices, so at the collar it follows long
+  triangle edges; the analytic cut gives the suit a clean top edge and covers the seam of
+  the scanned neckline underneath.
 - **Everything else is analytic, in rest space** (`PAINT_GLSL`): shoulder yoke, glove and
   boot regions, a waist line, a boot welt and a chest badge with a recessed slot. These are
   evaluated per fragment from the interpolated rest position, so they are crisp at any
@@ -52,8 +56,8 @@ the suit is painted inside the asset's own `MeshPhysicalMaterial` (`createSuitMa
 - The scanned face, hair and cloth folds survive underneath, because the shader modulates
   the suit colour by the atlas's local luminance rather than discarding the map.
 
-`restPaint()` in the same module is a TypeScript mirror of `suitTintAt`/`trimAt`, so the
-offline renderer can draw exactly what the shader draws — keep the two in step.
+`suitTintAt`, `trimAt` and `collarAt` each have a TypeScript mirror in the same module, so
+the offline renderer draws exactly what the shader draws — keep the pairs in step.
 
 `validate-character.ts` runs the material's `onBeforeCompile` against three's real
 `ShaderLib.physical` source and asserts every injection landed, with balanced braces. A

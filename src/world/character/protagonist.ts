@@ -93,6 +93,14 @@ const PAINT_GLSL = /* glsl */ `
 
     return clamp(max(max(waist * 0.55, badge * (1.0 - slot)), welt * 0.45), 0.0, 1.0);
   }
+
+  // A snug neck seal. The mask boundary is only resolved at vertices, so at the
+  // collar it follows long triangle edges; this analytic ring gives the suit a
+  // smooth top edge and covers the seam in the scanned neckline underneath.
+  float collarAt(vec3 rest) {
+    return (1.0 - smoothstep(1.398, 1.430, rest.y))
+         * smoothstep(-0.115, -0.085, rest.z);
+  }
 `;
 
 /** TS mirror of `suitTintAt`, used by the offline preview renderer. */
@@ -134,6 +142,15 @@ export function trimAt(x: number, y: number, z: number) {
     (1 - smoothstep(0.004, 0.006, outward));
   const welt = band(y, 0.128, 0.006) * (1 - smoothstep(0.1, 0.13, outward));
   return Math.max(0, Math.min(1, Math.max(Math.max(waist * 0.55, badge * (1 - slot)), welt * 0.45)));
+}
+
+/** TS mirror of `collarAt`, used by the offline preview renderer. */
+export function collarAt(x: number, y: number, z: number) {
+  const smoothstep = (edge0: number, edge1: number, value: number) => {
+    const t = THREE.MathUtils.clamp((value - edge0) / (edge1 - edge0), 0, 1);
+    return t * t * (3 - 2 * t);
+  };
+  return (1 - smoothstep(1.398, 1.43, y)) * smoothstep(-0.115, -0.085, z);
 }
 
 /**
@@ -261,7 +278,7 @@ export function createSuitMaterial(source: THREE.MeshStandardMaterial) {
         "#include <map_fragment>",
         `#include <map_fragment>
         #ifdef USE_MAP
-          float suit = smoothstep(0.26, 0.74, vSuit);
+          float suit = max(smoothstep(0.26, 0.74, vSuit), collarAt(vRest));
           float detail = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
           vec3 suitColour = suitTintAt(vRest) * mix(1.0, clamp(detail / 0.32, 0.6, 1.35), 0.3);
           // The collar seam is a shadowed band: it hides the mask gradient's
@@ -274,7 +291,7 @@ export function createSuitMaterial(source: THREE.MeshStandardMaterial) {
       .replace(
         "#include <roughnessmap_fragment>",
         `#include <roughnessmap_fragment>
-        float suitMask = smoothstep(0.26, 0.74, vSuit);
+        float suitMask = max(smoothstep(0.26, 0.74, vSuit), collarAt(vRest));
         float trim = trimAt(vRest);
         roughnessFactor = mix(roughnessFactor, mix(0.62, 0.34, trim), suitMask);`,
       )
