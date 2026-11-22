@@ -10,5 +10,6 @@ dist
 next-env.d.ts
 .vercel
 
-# offline character preview renders (scripts/preview-character.ts)
+# offline character preview renders (scripts/preview-model.ts)
 preview
+preview-model

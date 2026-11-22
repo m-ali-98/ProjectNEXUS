@@ -1,98 +1,121 @@
 # 07 — Character & camera
 
-The protagonist is generated entirely in code: no rigged mesh, no texture files, no
-downloads. Everything from the profile of her heel to the pore-level normal on her skin is
-built by `src/world/character/*`, which means the avatar is part of the codebase and is
-verified like any other system.
+The protagonist is the one imported asset in the project. Everything else — the facility,
+props, textures, HUD, audio — is generated in code; a believable human being is not
+something procedural primitives deliver, and an earlier version built from lofted surfaces
+and sculpted primitives proved it (details in "What was replaced" below).
 
-## How the model is built
-
-An earlier version assembled the figure from cylinders and spheres. It looked exactly like
-what it was: a mannequin. The current model is **lofted and sculpted** instead.
-
-| Layer | What it does |
+| | |
 | --- | --- |
-| `geometry/surface.ts` | The toolkit: `loft` (superellipse cross-sections), `loftZ` (front-to-back lasts), `sculpt` (Gaussian inflations along normals), `groove` (hair and fabric ribs), `tube` (strands, brows, lashes), `cutFaces` (vamp openings, face windows), `mirrorX`, `merge` |
-| `geometry/body.ts` | Torso, neck, arms, hands, legs, shoe last, sole, stiletto, strap |
-| `geometry/head.ts` | Skull + face field, eye lens and lids, brows, lips, ears, hair cap with a real hairline, back mass, side pieces |
-| `rig.ts` | The declarative skeleton: joint nodes with local offsets and the meshes bound to material keys |
-| `characterPose.ts` | Pure pose solver and the sole-contact ground solve |
-| `Character.tsx` | Walks the rig tree, registers a group per joint, blends the pose at 14/s |
+| Asset | *Woman Base Mesh* by [Grab3D](https://grab3d.com), CC0 1.0 |
+| Source | [harikishanbs88/woman-base-character](https://github.com/harikishanbs88/woman-base-character) |
+| Shipped file | `public/models/protagonist.glb` — 60 000 triangles, 1K maps, 2.7 MB |
+| Licence copy | `public/models/LICENSE-woman-base-mesh.txt` |
+| Modules | `src/world/character/protagonist.ts` (asset adapter), `Character.tsx` (behaviour) |
+| Tools | `scripts/preview-model.ts` (offline renderer), `scripts/validate-character.ts` (checks) |
 
-Nothing intersects anything else by accident: the eyes are shallow lenses sitting on a
-recessed socket with skin patches for lids, the lips are small domes that follow the mouth
-surface, and the hair shell is cut away over the face so it can never cover the eyes.
+## What the asset provides
 
-## Anatomy, in numbers
+A 24-bone humanoid rig (Hips, spine chain, neck/head, shoulders/arms/hands, legs/feet/toes)
+with two clips, `walk` and `run`, and a single skinned mesh with a base-colour atlas,
+normal map and packed metallic-roughness map. Height 1.68 m. The mesh is authored in
+centimetre units under an armature scaled to 0.01, so the skinned result is already correct
+in metres at scale 1 — the component applies no scale, only a half turn, because the asset
+faces +Z and the engine's forward is −Z.
 
-- Crown 1.755 m, chin 1.545 m, hip joint 0.905 m, knee 0.505 m, ankle 0.115 m.
-- Shoulder joints 0.128 m either side; hips 0.062 m.
-- Torso sections run from the crotch (−0.138 above the hip joint) to the neck base (+0.566),
-  with the bust, glutes, shoulder blades, collarbone hollow and trapezius sculpted into the
-  same surface.
-- Thigh 0.4 m, shin 0.39 m, upper arm 0.29 m, forearm 0.26 m.
-- Hands: lofted palm plus four two-phalange fingers and an opposed thumb.
-- Shoes: a pump last lofted from heel counter to pointed toe with the vamp cut out, a thin
-  sole edge and a curved stiletto whose tip lands exactly on y = 0.
-
-## Seeing the model without a GPU
-
-`scripts/preview-character.ts` walks the same rig with matrices and rasterises it with a
-z-buffered software renderer, writing front, three-quarter, side and two face views to
-`preview/`:
+The shipped file is the same asset after `scripts/optimise-model.sh`:
 
 ```bash
-npx tsx scripts/preview-character.ts           # writes preview/*.png
+gltf-transform weld        rigged.glb           welded.glb
+gltf-transform simplify    welded.glb           simplified.glb --ratio 0.2 --error 0.001
+gltf-transform resize      simplified.glb       resized.glb    --width 1024 --height 1024
+gltf-transform prune       resized.glb          public/models/protagonist.glb
 ```
 
-This exists because the build environment has no GPU or browser: without it, silhouette
-problems (spikes at joints, floating trim, a hair shell across the eyes) were invisible
-until someone opened the site. It is a reference image, not the shipping renderer.
+305 702 → 60 000 triangles, 4K → 1K maps, 13 MB → 2.7 MB. The rig, joint weights and both
+clips pass through untouched.
 
-## Pose and grounding
+## The flight suit
 
-`characterPose.ts` is pure: given `{ speed, run, turn, phase }` it returns joint angles,
-which `Character.tsx` applies with `"YXZ"` order and a 14/s blend so state changes read as
-weight rather than snapping.
+She ships in gym clothes, and importing a second outfit would double the download. Instead
+the suit is painted inside the asset's own `MeshPhysicalMaterial` (`createSuitMaterial`):
 
-Grounding is solved, not faked. Every frame the solver walks thigh → knee → ankle → sole
-contact for both legs and drops the pelvis so the lowest sole sits at y = 0.
-`scripts/validate-character.ts` steps the same forward kinematics over idle, walk, run and
-sprint and asserts that:
+- **Which vertices are suit** comes from a per-vertex mask: skin is whatever the head and
+  neck bones drive, so the collar follows the anatomy and bends with the neck. Raw scanned
+  weights are noisy, so the mask is Laplacian-smoothed over the mesh graph before it is
+  used; the fragment shader then fades between skin and suit across a wide range so the
+  boundary has no triangle stair-step to show.
+- **Everything else is analytic, in rest space** (`PAINT_GLSL`): shoulder yoke, glove and
+  boot regions, a waist line, a boot welt and a chest badge with a recessed slot. These are
+  evaluated per fragment from the interpolated rest position, so they are crisp at any
+  distance and stay glued to the limbs as she animates.
+- The scanned face, hair and cloth folds survive underneath, because the shader modulates
+  the suit colour by the atlas's local luminance rather than discarding the map.
 
-- no sole sinks more than 2 cm below the floor (idle −0.005 m … sprint −0.017 m);
-- the swing foot clears the floor (0.436 m at sprint);
-- the crown stays at the documented height;
-- every rig vertex is finite and inside its joint's bounds, both limbs are mirrored within
-  2 mm, and the stiletto tip lands on the floor.
+`restPaint()` in the same module is a TypeScript mirror of `suitTintAt`/`trimAt`, so the
+offline renderer can draw exactly what the shader draws — keep the two in step.
+
+`validate-character.ts` runs the material's `onBeforeCompile` against three's real
+`ShaderLib.physical` source and asserts every injection landed, with balanced braces. A
+silently missed replacement would ship an unpainted character.
+
+## Animation and grounding
+
+Three actions run continuously on one `AnimationMixer`; the frame loop owns the weights, so
+a blend never restarts a clip mid-stride:
+
+| Action | Clip | Weight | Time scale |
+| --- | --- | --- | --- |
+| `idle` | first two frames of `walk`, 1 s loop | 1 → 0 as speed rises | ~0.5 |
+| `walk` | `walk` | fades in below 3 m/s, out above 5.2 | `speed / 2.1`, clamped 0.65–2.1 |
+| `run` | `run` | complementary | `speed / 5.0`, clamped 0.8–1.6 |
+
+Weights are additionally smoothed at 9/s, and the mixer slows to 15 % while airborne with
+the pose held just off idle, plus a small forward lean.
+
+**Grounding.** Every clip floats the soles a little: measured over the full cycle, `walk`
+sits 21–33 mm high and `run` bottoms out at 11 mm. The component applies a per-clip offset
+(`PROTAGONIST.ground`, blended with the same weights as the clips) and the validator
+re-measures the result, so feet stay on the floor without a runtime raycast.
+
+A breathing offset is added to `Spine01` after the mixer writes the pose, and it is scaled
+with the reduced-motion setting.
+
+## Reviewing it without a GPU
+
+`scripts/preview-model.ts` loads the GLB through three's `GLTFLoader` inside jsdom (image
+decoding stubbed, geometry and clips intact), deforms it with `SkinnedMesh.getVertexPosition`,
+applies the same suit paint, and rasterises front / back / side / face views with a small
+software renderer:
 
 ```bash
-npx tsx scripts/validate-character.ts
+npx tsx scripts/preview-model.ts --anim walk --time 0.3   # preview-model/*.png
+npx tsx scripts/preview-model.ts --scan --anim run        # sole/crown per frame
 ```
 
-## Third-person boom
+This is how the model, the suit and the framing were iterated on with no browser available.
+The scans are also where the grounding numbers come from.
 
-`camera/thirdPerson.ts`: pivot 1.5 m up and 0.32 m to her right, 3.25 m back (min 0.85 m),
-aimed 9 m along the view direction, pitch clamped to −0.62 … 0.98 rad. A 12-step probe
-against the real colliders shortens the arm when geometry is behind her and keeps 0.32 m of
-floor clearance. `PlayerController` eases toward the solved pose; `releaseCamera()` returns
-the director's camera to the same boom.
+## Camera contract
 
-The character turns toward her velocity when moving and toward the camera yaw when idle.
+The third-person boom (`world/camera/thirdPerson.ts`) is unchanged by the swap to a real
+asset: it orbits a pivot 1.5 m above the player's feet, offset 0.32 m toward the right
+shoulder, aims 9 m ahead and slightly down so the character sits low-centre, and shortens
+through 12 steps when world collision would put geometry between the camera and the
+character. Pitch is clamped to −0.62…0.98 rad and the camera never drops below 0.32 m.
 
-## Shading
+Because the character is 1.68 m with her feet at the player's origin, the boom framing,
+the intro shot and the interaction probe all needed no changes.
 
-- `MeshPhysicalMaterial` throughout: clearcoat suit with a woven normal map, sheen on the
-  skin, leather uppers, a metal stiletto and a glossy cornea.
-- The scene's PMREM environment map gives the suit and metal something to reflect.
-- SSAO (ULTRA) anchors her to the floor; bloom picks up the cyan accent strips.
+## What was replaced
 
-## Honest limitations
+The first protagonist was built from lofted cross-sections and sculpted primitives: a
+57-part rig, a hand-written pose solver, a `loftZ` shoe last with a stiletto heel, an iris
+built from a rotated disc, and a hair shell cut away over the face. It was verified down to
+the millimetre — and it still read as a mannequin, because procedural primitives cannot
+produce a face. The files (`rig.ts`, `characterPose.ts`, `characterData.ts`,
+`characterMaterials.ts`, `geometry/*`, `scripts/preview-character.ts`) were deleted rather
+than left as dead code; the geometry toolkit went with them.
 
-The figure is a well-formed stylised human, not a scanned or sculpted artist's model. Faces
-are the hardest thing to fake procedurally: hers reads correctly in silhouette and at
-gameplay distance, and is deliberately simple at extreme close range. Importing a rigged
-character (GLB/FBX) would raise the ceiling, but it would also add a binary asset and break
-the project's "everything here is generated" premise — that is an owner decision, not a
-technical one. In the meantime the software preview and the rig validator make every change
-reviewable.
+Nothing else in the project depends on them, and `docs/02-architecture.md` no longer lists
+them.

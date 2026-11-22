@@ -83,25 +83,40 @@ real store state, checking both that it renders and that key content is present:
 live label, sector banner, toast, tour caption, mobile controls and the WebGL fallback.
 34 assertions, all passing.
 
-### `scripts/validate-character.ts` (not part of `verify`)
+### `scripts/validate-character.ts`
 
-Replays the character's forward kinematics over idle, walk, run and sprint cycles and
-asserts the footwear actually plants: no sole sinks more than 2 cm below the floor, the
-swing foot clears it, and the crown height matches `characterData.ts`. It then walks the
-real rig geometry (the same meshes the renderer mounts) and checks that every vertex is
-finite and inside its joint's bounds, that the two sides are mirrored within 2 mm, and that
-the stiletto tip reaches y = 0.
+The protagonist is an imported skinned asset rather than generated geometry, so the checks
+moved with it. The validator loads the shipped GLB through the same loader the app uses and
+asserts:
 
-`scripts/preview-character.ts` is the visual counterpart: it rasterises the same rig with a
-software renderer into `preview/*.png`, which is how the model is inspected in an
-environment with no GPU.
+- the file exists, is under the 4 MB budget and ships with its CC0 licence text;
+- the mesh is inside the 80 000-triangle budget, the skeleton has the expected bones and
+  both `walk` and `run` clips are present;
+- **foot contact**: stepping each clip in 12 increments, the lowest skinned vertex stays
+  within 20 mm of the floor and never more than 30 mm above it once the per-clip grounding
+  offset the game applies is included, and the crown stays near 1.68 m;
+- **suit paint**: the per-vertex mask covers 45–80 % of the mesh (i.e. the suit is painted,
+  the head is not);
+- **shader injection**: the material's `onBeforeCompile` is run against three's real
+  `ShaderLib.physical` source and every expected injection is present, with balanced
+  braces. A silently missed replacement would ship an unpainted character, so this is
+  checked rather than assumed.
+
+`scripts/preview-model.ts` is the visual counterpart: it loads the GLB in jsdom, skins it
+in software, applies the same suit paint and rasterises front / back / side / face views to
+`preview-model/*.png` — how the model is reviewed in an environment with no GPU. Its
+`--scan` mode walks a clip and prints sole and crown heights, which is where the grounding
+offsets come from.
 
 ```bash
 npx tsx scripts/validate-character.ts
+npx tsx scripts/preview-model.ts --anim walk --time 0.3
+npx tsx scripts/preview-model.ts --scan --anim run
 ```
 
-Current result: errors 0 — deepest sole −0.017 m (sprint), swing clearance 0.436 m,
-crown 1.756 m, 57 rig parts / 23 803 vertices all finite, stiletto tip at 0.000 m.
+Current result: errors 0 — 2.71 MB, 60 000 triangles, 24 bones, `run` + `walk` clips,
+sole 0.000 / −0.003 / −0.002 m and crowns 1.69 / 1.69 / 1.66 m for idle / walk / run, suit
+covering 63 % of the mesh, shader injections all present.
 
 ## What is not automated
 

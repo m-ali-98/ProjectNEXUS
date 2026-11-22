@@ -1,251 +1,171 @@
 /**
- * Character rig validation.
+ * Protagonist asset checks.
  *
  *   npx tsx scripts/validate-character.ts
  *
- * Rebuilds the rig hierarchy as a pure forward-kinematics chain and steps the
- * animation through idle, walk, run and sprint. It asserts:
- *   · no joint ever produces NaN
- *   · the stance foot stays on the floor (the ground solve works)
- *   · the swinging foot clears the floor
- *   · the crown stays within human height bounds
- *   · limb angles stay inside anatomical limits
- *   · left/right symmetry in the idle pose
+ * The character is now a real skinned asset rather than generated geometry, so
+ * what has to be verified changed with it: the file has to be present and small
+ * enough to ship, the rig has to be the one the game expects, every clip has to
+ * put her feet on the floor, and the suit shader has to compile into a valid
+ * program. Geometry-level checks (mirroring, limb bounds) no longer apply —
+ * those were properties of the procedural rig.
  */
-import * as THREE from "three";
-import { BODY, HEEL_LIFT, SHOE_PROFILE, SOLE_CONTACT } from "../src/world/character/characterData";
-import { computePose, gaitPhase, type Pose, type PoseInputs } from "../src/world/character/characterPose";
-import { rigParts } from "../src/world/character/rig";
+import { readFileSync, statSync } from "node:fs";
+import { loadGlb } from "./lib/load-glb";
+import { PROTAGONIST, paintProtagonist, prepareProtagonist } from "../src/world/character/protagonist";
+
+const ASSET = "public/models/protagonist.glb";
+const LICENCE = "public/models/LICENSE-woman-base-mesh.txt";
+const MAX_BYTES = 4 * 1024 * 1024;
+const MAX_TRIANGLES = 80_000;
 
 const errors: string[] = [];
-const warnings: string[] = [];
-const note = (m: string) => console.log(`  · ${m}`);
+const notes: string[] = [];
 
-/** Forward kinematics for the two legs, using the same chain as Character.tsx. */
-function footHeights(pose: Pose) {
-  const rootY = pose.root.y;
+async function main() {
+  // ---- file ----------------------------------------------------------------
+  let bytes = 0;
+  try {
+    bytes = statSync(ASSET).size;
+  } catch {
+    errors.push(`${ASSET} is missing`);
+  }
+  if (bytes > MAX_BYTES) {
+    errors.push(`${ASSET} is ${(bytes / 1048576).toFixed(1)} MB, budget is 4 MB`);
+  } else if (bytes > 0) {
+    notes.push(`${ASSET} — ${(bytes / 1048576).toFixed(2)} MB`);
+  }
 
-  const leg = (thigh: number, knee: number, ankle: number, side: 1 | -1) => {
-    const hip = new THREE.Object3D();
-    hip.position.set(side * BODY.hipHalfWidth, BODY.hip + rootY, 0);
-    hip.rotation.set(pose.hips.rotX, pose.hips.rotY, pose.hips.rotZ, "YXZ");
+  const licence = readFileSync(LICENCE, "utf8");
+  if (!/CC0 1\.0/.test(licence)) errors.push(`${LICENCE} does not look like CC0`);
+  if (!/Grab3D/.test(licence)) errors.push(`${LICENCE} does not name the original author`);
 
-    const thighJoint = new THREE.Object3D();
-    thighJoint.rotation.set(thigh, 0, side * 0.015, "YXZ");
-    hip.add(thighJoint);
+  // ---- asset ---------------------------------------------------------------
+  const { gltf, mesh } = await loadGlb(ASSET);
+  const geometry = mesh.geometry;
+  const index = geometry.getIndex();
+  const triangles = Math.floor((index ? index.count : geometry.getAttribute("position").count) / 3);
+  const bones = mesh.skeleton.bones.length;
 
-    const kneeJoint = new THREE.Object3D();
-    kneeJoint.position.set(0, -0.4, 0);
-    kneeJoint.rotation.set(knee, 0, 0, "YXZ");
-    thighJoint.add(kneeJoint);
+  if (triangles > MAX_TRIANGLES) {
+    errors.push(`${triangles.toLocaleString()} triangles exceeds the ${MAX_TRIANGLES.toLocaleString()} budget`);
+  }
+  if (bones < 18) errors.push(`skeleton has only ${bones} bones`);
 
-    const ankleJoint = new THREE.Object3D();
-    ankleJoint.position.set(0, -0.39, 0);
-    ankleJoint.rotation.set(ankle, 0, 0, "YXZ");
-    kneeJoint.add(ankleJoint);
+  const clipNames = gltf.animations.map((clip) => clip.name);
+  for (const required of ["walk", "run"]) {
+    if (!clipNames.includes(required)) errors.push(`missing "${required}" clip (have ${clipNames.join(", ")})`);
+  }
 
-    // Real contact points: the ball of the foot from the shoe profile, and the
-    // stiletto tip which sits at the same height under the heel.
-    const ball = new THREE.Vector3(...SOLE_CONTACT);
-    const heel = new THREE.Vector3(0, -HEEL_LIFT, 0.048);
-    hip.updateMatrixWorld(true);
-    return {
-      ankle: ankleJoint.getWorldPosition(new THREE.Vector3()),
-      heel: ankleJoint.localToWorld(heel.clone()),
-      ball: ankleJoint.localToWorld(ball.clone()),
-    };
+  // ---- grounding -----------------------------------------------------------
+  // The soles have to sit on the floor once the offset the game applies is
+  // included. A walk may lift a foot but never leave the ground.
+  const THREE = await import("three");
+  const rig = prepareProtagonist(gltf.scene, gltf.animations);
+  const posedMesh = rig.mesh;
+  const mixer = new THREE.AnimationMixer(rig.scene);
+  const offsets: Record<string, number> = {
+    idle: PROTAGONIST.ground.idle,
+    walk: PROTAGONIST.ground.walk,
+    run: PROTAGONIST.ground.run,
   };
 
-  return {
-    left: leg(pose.thighL.rotX, pose.kneeL.rotX, pose.ankleL.rotX, 1),
-    right: leg(pose.thighR.rotX, pose.kneeR.rotX, pose.ankleR.rotX, -1),
+  const soleHeight = () => {
+    const point = new THREE.Vector3();
+    let lowest = Infinity;
+    let crown = -Infinity;
+    const total = geometry.getAttribute("position").count;
+    for (let i = 0; i < total; i += 3) {
+      // Skinned positions come back in mesh-local units; the asset's node scale
+      // (0.01 against centimetre bones) is what turns them into metres.
+      posedMesh.getVertexPosition(i, point);
+      point.applyMatrix4(posedMesh.matrixWorld);
+      lowest = Math.min(lowest, point.y);
+      crown = Math.max(crown, point.y);
+    }
+    return { lowest, crown };
   };
-}
 
-const baseInput: PoseInputs = {
-  time: 0,
-  speed: 0,
-  sprinting: false,
-  moving: false,
-  turnRate: 0,
-  motion: 1,
-  lookYaw: 0,
-  lookPitch: 0,
-};
-
-type Scenario = { name: string; speed: number; sprinting: boolean; moving: boolean };
-
-const scenarios: Scenario[] = [
-  { name: "idle", speed: 0, sprinting: false, moving: false },
-  { name: "walk", speed: 3.9, sprinting: false, moving: true },
-  { name: "run", speed: 5.5, sprinting: false, moving: true },
-  { name: "sprint", speed: 7.2, sprinting: true, moving: true },
-];
-
-for (const scenario of scenarios) {
-  let phase = 0;
-  let minSole = Infinity;
-  let maxSole = -Infinity;
-  let maxSwingClearance = 0;
-  let worstAir = 0;
-
-  for (let frame = 0; frame < 900; frame++) {
-    const delta = 1 / 60;
-    phase = gaitPhase(phase, scenario.speed, delta, scenario.sprinting);
-    const pose = computePose(
-      {
-        ...baseInput,
-        time: frame * delta,
-        moving: scenario.moving,
-        speed: scenario.speed,
-        sprinting: scenario.sprinting,
-      },
-      phase,
-    );
-
-    const numbers = [
-      pose.root.y,
-      pose.hips.rotX,
-      pose.spine.rotX,
-      pose.chest.rotX,
-      pose.head.rotY,
-      pose.shoulderL.rotX,
-      pose.elbowL.rotX,
-      pose.thighL.rotX,
-      pose.kneeL.rotX,
-      pose.ankleL.rotX,
-    ];
-    if (numbers.some((n) => !Number.isFinite(n))) {
-      errors.push(`${scenario.name}: non-finite pose value at frame ${frame}`);
-      break;
+  for (const [name, clip] of Object.entries({ idle: rig.idle, walk: rig.walk, run: rig.run })) {
+    mixer.stopAllAction();
+    mixer.clipAction(clip).play();
+    let lowest = Infinity;
+    let crown = 0;
+    for (let step = 0; step <= 12; step++) {
+      mixer.setTime((step / 12) * clip.duration);
+      rig.scene.updateMatrixWorld(true);
+      posedMesh.skeleton.update();
+      const { lowest: sole, crown: top } = soleHeight();
+      lowest = Math.min(lowest, sole + offsets[name]);
+      crown = Math.max(crown, top + offsets[name]);
     }
-    if (Math.abs(pose.kneeL.rotX) > 1.75 || Math.abs(pose.thighL.rotX) > 0.95) {
-      errors.push(`${scenario.name}: joint angle outside anatomical range at frame ${frame}`);
-      break;
+    mixer.stopAllAction();
+    if (lowest < -0.02) errors.push(`${name}: sole ${(lowest * 1000).toFixed(0)} mm through the floor`);
+    if (lowest > 0.03) errors.push(`${name}: sole floats ${(lowest * 1000).toFixed(0)} mm`);
+    if (Math.abs(crown - PROTAGONIST.height) > 0.09) {
+      errors.push(`${name}: crown ${crown.toFixed(2)} m, expected about ${PROTAGONIST.height} m`);
     }
-
-    const feet = footHeights(pose);
-    const lowest = Math.min(feet.left.heel.y, feet.left.ball.y, feet.right.heel.y, feet.right.ball.y);
-    const leftSole = Math.min(feet.left.heel.y, feet.left.ball.y);
-    const rightSole = Math.min(feet.right.heel.y, feet.right.ball.y);
-
-    minSole = Math.min(minSole, lowest);
-    maxSole = Math.max(maxSole, lowest);
-    maxSwingClearance = Math.max(maxSwingClearance, Math.max(leftSole, rightSole));
-    worstAir = Math.max(worstAir, Math.min(leftSole, rightSole));
+    notes.push(`${name}: sole ${lowest.toFixed(3)} m, crown ${crown.toFixed(2)} m`);
   }
 
-  note(
-    `${scenario.name}: lowest sole ${minSole.toFixed(3)} .. ${maxSole.toFixed(3)} m, ` +
-      `swing clearance ${maxSwingClearance.toFixed(3)} m`,
-  );
-
-  if (minSole < -0.02) errors.push(`${scenario.name}: a foot sinks ${(-minSole).toFixed(3)} m through the floor`);
-  if (scenario.moving && worstAir > 0.06) {
-    errors.push(`${scenario.name}: both feet are airborne ${worstAir.toFixed(3)} m (figure floats)`);
+  // ---- suit paint ----------------------------------------------------------
+  const suit = paintProtagonist(mesh);
+  let painted = 0;
+  let skin = 0;
+  for (const value of suit) {
+    if (value > 0.9) painted++;
+    if (value < 0.1) skin++;
   }
-  if (scenario.moving && maxSwingClearance < 0.09) {
-    warnings.push(`${scenario.name}: swinging foot only lifts ${maxSwingClearance.toFixed(3)} m`);
+  const share = painted / suit.length;
+  if (share < 0.45 || share > 0.8) {
+    errors.push(`suit covers ${(share * 100).toFixed(0)}% of the mesh, expected 45–80%`);
   }
-}
+  notes.push(`suit covers ${(share * 100).toFixed(0)}%, skin ${((skin / suit.length) * 100).toFixed(0)}%`);
 
-// Idle symmetry
-const idlePose = computePose({ ...baseInput, time: 1.2 }, 0);
-const asymmetry = Math.abs(idlePose.thighL.rotX - idlePose.thighR.rotX);
-if (asymmetry > 0.25) warnings.push(`idle legs asymmetric by ${asymmetry.toFixed(3)} rad`);
+  // ---- shader --------------------------------------------------------------
+  // Build the material exactly as the app does and confirm every injection point
+  // exists in three's physical shader. A missed replacement would silently ship
+  // an unpainted character.
+  const { ShaderLib } = THREE;
+  const shader = {
+    vertexShader: ShaderLib.physical.vertexShader,
+    fragmentShader: ShaderLib.physical.fragmentShader,
+    uniforms: {},
+  } as unknown as { vertexShader: string; fragmentShader: string };
+  const material = rig.material;
+  material.onBeforeCompile?.(shader as never, null as never);
 
-// Standing height sanity: crown ≈ 1.75, heels add 0.115 to the leg chain.
-const standing = computePose({ ...baseInput, time: 0.4 }, 0);
-const crown = BODY.crown + standing.root.y;
-note(`standing crown ${crown.toFixed(3)} m (pelvis ${BODY.hip.toFixed(3)} m, heel lift ${HEEL_LIFT.toFixed(3)} m)`);
-if (crown < 1.6 || crown > 1.85) errors.push(`unexpected character height ${crown.toFixed(3)} m`);
-
-// Jump/landing pose must not explode.
-const turnPose = computePose({ ...baseInput, turnRate: 6, moving: true, speed: 3 }, 1.1);
-if (!Number.isFinite(turnPose.hips.rotZ) || Math.abs(turnPose.hips.rotZ) > 0.4) {
-  errors.push("turning lean is outside a believable range");
-}
-
-
-/* -------------------------------------------------------------------------- */
-/* Rig geometry                                                               */
-/* -------------------------------------------------------------------------- */
-
-
-/**
- * The geometry is built by the same code the renderer uses, so it can be checked
- * headlessly: finite vertices, plausible bounds, left/right symmetry and the
- * shoe actually reaching the floor at the heel lift.
- */
-function validateRigGeometry() {
-  const parts = rigParts();
-  const box = new THREE.Box3();
-  const point = new THREE.Vector3();
-  let vertices = 0;
-  let bad = 0;
-
-  for (const { part } of parts) {
-    const position = part.geometry.getAttribute("position");
-    vertices += position.count;
-    for (let i = 0; i < position.count; i++) {
-      point.fromBufferAttribute(position, i);
-      if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || !Number.isFinite(point.z)) {
-        bad++;
-      }
-      // parts are built in their joint's local space, so only sanity-bound them
-      if (Math.abs(point.x) > 0.4 || Math.abs(point.y) > 0.6 || Math.abs(point.z) > 0.4) bad++;
-      box.expandByPoint(point);
+  const checks: [string, string][] = [
+    ["vertex varying", "varying vec3 vRest;"],
+    ["vertex rest", "vRest = position;"],
+    ["fragment paint", "suitTintAt(vRest)"],
+    ["fragment trim", "trimAt(vRest)"],
+    ["fragment emissive", "totalEmissiveRadiance +="],
+  ];
+  for (const [label, needle] of checks) {
+    if (!shader.vertexShader.includes(needle) && !shader.fragmentShader.includes(needle)) {
+      errors.push(`suit shader: ${label} injection missing`);
     }
   }
-
-  note(`rig: ${parts.length} parts, ${vertices.toLocaleString()} vertices`);
-  if (bad > 0) errors.push(`rig: ${bad} non-finite or out-of-bounds vertices`);
-  else note(`rig: all ${vertices.toLocaleString()} vertices finite and in bounds`);
-
-  // The shoe must reach the floor at exactly the heel lift.
-  const shoe = parts.find(({ part }) => part.key.startsWith("shoe-"));
-  const stiletto = parts.find(({ part }) => part.key.startsWith("stiletto-"));
-  if (!shoe || !stiletto) {
-    errors.push("rig: shoe geometry missing");
-    return;
-  }
-  const shoeBox = new THREE.Box3().setFromBufferAttribute(
-    shoe.part.geometry.getAttribute("position") as THREE.BufferAttribute,
-  );
-  const stilettoBox = new THREE.Box3().setFromBufferAttribute(
-    stiletto.part.geometry.getAttribute("position") as THREE.BufferAttribute,
-  );
-  note(
-    `rig: shoe spans z ${shoeBox.min.z.toFixed(3)}…${shoeBox.max.z.toFixed(3)}, ` +
-      `heel tip y ${(BODY.ankle + stilettoBox.min.y).toFixed(3)}`,
-  );
-  if (Math.abs(BODY.ankle + stilettoBox.min.y) > 0.004) {
-    errors.push(`rig: stiletto tip is ${(BODY.ankle + stilettoBox.min.y).toFixed(3)} m above the floor`);
-  }
-  if (Math.abs(BODY.ankle + shoeBox.min.y) > 0.005) {
-    errors.push(`rig: shoe sole is not on the floor (${(BODY.ankle + shoeBox.min.y).toFixed(3)} m)`);
+  for (const [name, source] of [
+    ["vertex", shader.vertexShader],
+    ["fragment", shader.fragmentShader],
+  ] as const) {
+    const open = (source.match(/{/g) ?? []).length;
+    const close = (source.match(/}/g) ?? []).length;
+    if (open !== close) errors.push(`suit shader: unbalanced braces in the ${name} shader (${open} vs ${close})`);
+    if ((source.match(/;/g) ?? []).length === 0) errors.push(`suit shader: ${name} shader looks empty`);
   }
 
-  // left/right symmetry of the limbs
-  const left = parts.find(({ part }) => part.key === "upperArm-1");
-  const right = parts.find(({ part }) => part.key === "upperArm--1");
-  if (left && right) {
-    const a = new THREE.Box3().setFromBufferAttribute(
-      left.part.geometry.getAttribute("position") as THREE.BufferAttribute,
-    );
-    const b = new THREE.Box3().setFromBufferAttribute(
-      right.part.geometry.getAttribute("position") as THREE.BufferAttribute,
-    );
-    if (Math.abs(a.max.x + b.min.x) > 0.002 || Math.abs(a.max.y - b.max.y) > 0.002) {
-      errors.push("rig: arms are not mirrored");
-    } else {
-      note("rig: limbs are mirrored within 2 mm");
-    }
+  console.log("character asset");
+  notes.forEach((note) => console.log(`  · ${note}`));
+  console.log(`  · ${bones} bones, ${triangles.toLocaleString()} triangles, clips ${clipNames.join(", ")}`);
+  if (errors.length) {
+    console.log("\nerrors:");
+    errors.forEach((error) => console.log(`  ✗ ${error}`));
+    process.exit(1);
   }
+  console.log("\n  ✓ character asset valid");
 }
 
-validateRigGeometry();
-console.log(`errors: ${errors.length}`);
-errors.forEach((e) => console.log(`  ✗ ${e}`));
-warnings.forEach((w) => console.log(`  ! ${w}`));
-process.exit(errors.length ? 1 : 0);
+void main();

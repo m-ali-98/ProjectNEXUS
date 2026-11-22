@@ -14,7 +14,10 @@
     "verify:session": "tsx scripts/simulate-session.ts",
     "verify:render": "tsx --tsconfig scripts/tsconfig.smoke.json scripts/smoke-render.mts",
     "verify:ui": "tsx --tsconfig scripts/tsconfig.smoke.json scripts/smoke-ui.mts",
-    "verify": "npm run verify:world && npm run verify:connectivity && npm run verify:session && npm run verify:render && npm run verify:ui"
+    "verify": "npm run verify:world && npm run verify:connectivity && npm run verify:session && npm run verify:render && npm run verify:ui",
+    "optimise:model": "bash scripts/optimise-model.sh",
+    "verify:character": "tsx scripts/validate-character.ts",
+    "preview:model": "tsx scripts/preview-model.ts --anim walk --time 0.3"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.3.0",
@@ -34,14 +37,17 @@
     "zustand": "5.1.0"
   },
   "devDependencies": {
+    "@gltf-transform/cli": "^4.5.1",
     "@react-three/test-renderer": "^9.1.1",
     "@tailwindcss/postcss": "4.3.5",
+    "@types/jsdom": "^30.0.0",
     "@types/node": "22.20.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@types/three": "0.187.0",
     "eslint": "9.39.5",
     "eslint-config-next": "15.5.29",
+    "jpeg-js": "^0.4.4",
     "jsdom": "^31.0.1",
     "tailwindcss": "4.3.5",
     "tsx": "4.20.6",

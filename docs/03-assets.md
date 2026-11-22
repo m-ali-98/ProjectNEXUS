@@ -2,8 +2,8 @@
 
 ## What ships today
 
-The repository contains **no binary 3D assets**. Everything in the facility is generated
-at runtime:
+The repository contains **one binary 3D asset**: the protagonist's body mesh. Everything
+else in the facility is generated at runtime:
 
 | Asset class | Source | Produced by |
 | --- | --- | --- |
@@ -14,11 +14,61 @@ at runtime:
 | Holograms, node graphs, pipeline, globe, streaming paths | Lines, instanced points, additive planes | `sectors/*.tsx`, `environment/Effects.tsx` |
 | Text | `troika-three-text` through `environment/Text3D.tsx` | self-hosted WOFF subsets |
 | Fonts | `public/fonts/*.woff` (Rajdhani 500/600/700, IBM Plex Mono 400/500) | Fontsource, copied in |
+| Protagonist body, rig and clips | `public/models/protagonist.glb` (60,000 triangles, 1K maps) | CC0 asset, decimated with `@gltf-transform` |
 
-Consequences: zero download cost for geometry, no texture memory spikes, and every
+Consequences: no download cost for facility geometry, no texture memory spikes, and every
 surface remains themable from `materials.ts`. It also means the environment is
 **stylised industrial**, not photoreal — that is a deliberate identity choice, and the
-Blender work below is what would raise fidelity further.
+Blender work below is what would raise fidelity further. The character is the exception:
+a believable human is not something procedural primitives can deliver, so one rigged
+scan-derived mesh is imported (see below).
+
+## The protagonist asset
+
+| | |
+| --- | --- |
+| Asset | *Woman Base Mesh* by [Grab3D](https://grab3d.com) |
+| Redistributor | [harikishanbs88/woman-base-character](https://github.com/harikishanbs88/woman-base-character) |
+| Licence | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/legalcode) — public domain dedication, no attribution required (credited anyway) |
+| Local licence copy | `public/models/LICENSE-woman-base-mesh.txt` |
+| Original form | 305,702 triangles, 4K PBR maps, 24-bone rig, `walk` + `run` clips, 1.68 m, published as AI-assisted (Meshy image-to-3D, retouched in Blender) |
+| Shipped form | 60,000 triangles, 1K maps, 2.7 MB, same rig and clips |
+
+What changed, and why:
+
+1. **Decimation.** 300 k triangles plus 4K maps is a desktop-asset budget, not a
+   web one. `scripts/optimise-model.sh` welds, simplifies to 20 % (`--error 0.001`),
+   resizes every texture to 1K and prunes unused data. The rig, joint weights and both
+   animation clips survive untouched.
+2. **No rescale.** The GLB's armature is authored at 0.01 scale with centimetre bones;
+   the skinned result is already 1.68 m at scale 1, so the component applies no scale —
+   only a half turn, because the asset faces +Z and the engine's forward is −Z.
+3. **Suit.** The mesh ships in gym clothes. Rather than importing a second asset, the
+   suit is painted inside the asset's own material (`src/world/character/protagonist.ts`):
+   a per-vertex mask decides suit versus skin, and analytic rest-space shapes add the
+   collar, gloves, boots, waist line and chest badge per fragment. The scanned face,
+   hair and cloth folds survive underneath.
+4. **Grounding.** Each clip floats the soles up to 33 mm, so the component applies a
+   measured per-clip offset; `scripts/validate-character.ts` re-measures it every run.
+
+Regenerating the shipped GLB from the original download:
+
+```bash
+# 1. fetch the CC0 source (not committed: 13 MB of unoptimised asset)
+git clone --depth 1 https://github.com/harikishanbs88/woman-base-character /tmp/woman
+cp /tmp/woman/rigged.glb public/models/protagonist.glb
+
+# 2. decimate + retexture (needs the dev dependency @gltf-transform/cli)
+npm run optimise:model
+
+# 3. review headlessly, then validate
+npx tsx scripts/preview-model.ts --anim walk --time 0.3   # writes preview-model/*.png
+npx tsx scripts/validate-character.ts
+```
+
+Attribution is not required by CC0, but the source, author and licence are recorded
+here, in `README.md` and next to the file itself — a portfolio that documents the origin
+of every asset is worth more than one that hides it.
 
 ### Text and glyph coverage
 

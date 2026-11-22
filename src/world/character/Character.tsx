@@ -1,12 +1,11 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
-import { characterMaterials } from "./characterMaterials";
-import { blendPose, computePose, gaitPhase, type Pose, type PoseInputs } from "./characterPose";
-import { buildRig, type RigNode } from "./rig";
+import { PROTAGONIST, prepareProtagonist, type ProtagonistRig as Rig } from "./protagonist";
 import { playerState } from "@/world/player/playerState";
 import { useNexusStore } from "@/stores/nexusStore";
 import { useQuality } from "@/lib/quality";
@@ -38,142 +37,182 @@ function useBlobShadow() {
   }, []);
 }
 
+type Blends = { idle: number; walk: number; run: number };
+
+/**
+ * Loads the asset once, in the background.
+ *
+ * A manual loader rather than a suspending hook: the model is a single 2.7 MB
+ * file, and this way a failed load degrades to "no character" with a console
+ * warning instead of tearing down the scene — which also keeps the headless
+ * render test meaningful, since there is no server to fetch from there.
+ */
+function useProtagonist() {
+  const [rig, setRig] = useState<Rig | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const loader = new GLTFLoader();
+    try {
+      loader.load(
+      PROTAGONIST.url,
+        (gltf) => {
+          if (cancelled) return;
+          try {
+            setRig(prepareProtagonist(gltf.scene, gltf.animations));
+          } catch (error) {
+            console.warn("protagonist: could not prepare the asset", error);
+          }
+        },
+        undefined,
+        (error) => console.warn("protagonist: could not load", PROTAGONIST.url, error),
+      );
+    } catch (error) {
+      // No document base to resolve against (headless render test), or the
+      // request could not be created at all.
+      console.warn("protagonist: could not request the asset", error);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return rig;
+}
+
+/**
+ * The rig itself.
+ *
+ * Kept in its own component so the asset can stream in without holding the
+ * traveller's lights and contact shadow hostage — and so the headless render
+ * test still mounts something real while the GLB is unavailable.
+ */
+function ProtagonistRig({ rig }: { rig: Rig }) {
+  const mixer = useMemo(() => new THREE.AnimationMixer(rig.scene), [rig]);
+  const actions = useMemo(
+    () => ({
+      idle: mixer.clipAction(rig.idle),
+      walk: mixer.clipAction(rig.walk),
+      run: mixer.clipAction(rig.run),
+    }),
+    [mixer, rig],
+  );
+  useMemo(() => {
+    // All three run continuously; the frame loop owns the weights so a blend
+    // never restarts a clip mid-stride.
+    for (const action of Object.values(actions)) {
+      action.play();
+      action.setEffectiveWeight(0);
+      action.setLoop(THREE.LoopRepeat, Infinity);
+    }
+    actions.idle.setEffectiveWeight(1);
+  }, [actions]);
+
+  const ground = useRef(PROTAGONIST.ground.idle);
+  const lean = useRef(0);
+  const blends = useRef<Blends>({ idle: 1, walk: 0, run: 0 });
+  const settings = useNexusStore((s) => s.settings);
+
+  useFrame((state, rawDelta) => {
+    const delta = Math.min(rawDelta, 0.045);
+    const motion = settings.motion === "reduced" ? 0.25 : 1;
+    const speed = playerState.speed;
+    const airborne = !playerState.onGround;
+
+    const runBlend = THREE.MathUtils.smoothstep(speed, 3.0, 5.2);
+    const moveBlend = THREE.MathUtils.clamp(speed / 1.1, 0, 1);
+    const target: Blends = airborne
+      ? { idle: 0.8, walk: 0.2, run: 0 }
+      : {
+          idle: 1 - moveBlend,
+          walk: moveBlend * (1 - runBlend),
+          run: moveBlend * runBlend,
+        };
+
+    const follow = Math.min(1, delta * 9);
+    blends.current.idle += (target.idle - blends.current.idle) * follow;
+    blends.current.walk += (target.walk - blends.current.walk) * follow;
+    blends.current.run += (target.run - blends.current.run) * follow;
+
+    actions.idle.setEffectiveWeight(blends.current.idle);
+    actions.walk.setEffectiveWeight(blends.current.walk);
+    actions.run.setEffectiveWeight(blends.current.run);
+
+    // Stride length is fixed per clip, so playback speed follows ground speed.
+    actions.walk.setEffectiveTimeScale(THREE.MathUtils.clamp(speed / 2.1, 0.65, 2.1) * motion);
+    actions.run.setEffectiveTimeScale(THREE.MathUtils.clamp(speed / 5.0, 0.8, 1.6) * motion);
+    actions.idle.setEffectiveTimeScale((airborne ? 0.1 : 0.12 + 0.36) * motion);
+
+    mixer.update(airborne ? delta * 0.15 : delta);
+
+    // Grounding: measured per clip, blended with the same weights as the clips.
+    const weight =
+      blends.current.idle + blends.current.walk + blends.current.run || 1;
+    const targetGround =
+      (blends.current.idle * PROTAGONIST.ground.idle +
+        blends.current.walk * PROTAGONIST.ground.walk +
+        blends.current.run * PROTAGONIST.ground.run) /
+      weight;
+    ground.current += (targetGround - ground.current) * Math.min(1, delta * 10);
+
+    const targetLean = airborne ? -0.12 : -0.05 * moveBlend;
+    lean.current += (targetLean - lean.current) * Math.min(1, delta * 5);
+
+    rig.scene.position.y = ground.current;
+    rig.scene.rotation.x = lean.current;
+    rig.scene.rotation.y = 0;
+
+    // Breathing: a small additive offset applied after the mixer writes the pose.
+    const spine = rig.mesh.skeleton.bones.find((bone) => /^spine01$/i.test(bone.name));
+    if (spine) {
+      spine.rotation.x += Math.sin(state.clock.elapsedTime * 1.6) * 0.012 * motion;
+    }
+  });
+
+  return (
+    <group rotation={[0, PROTAGONIST.facingOffset, 0]}>
+      <primitive object={rig.scene} />
+    </group>
+  );
+}
+
 /**
  * The protagonist.
  *
- * Geometry comes from `rig.ts` (lofted, sculpted surfaces), the pose from
- * `characterPose.ts`. This component is the glue: it walks the declarative rig,
- * registers a group per joint, and copies angles onto them every frame.
- *
- * Using the shared rig tree means the offline preview renderer draws exactly the
- * same meshes, so the model can be reviewed headlessly.
+ * A real skinned character asset (see `protagonist.ts` for source and licence)
+ * driven by the player state: walk and run clips cross-fade by speed, an idle
+ * pose is sampled from the walk cycle, and the suit is shaded inside the asset's
+ * own material. Foot contact is held by per-clip grounding offsets measured from
+ * the asset, so her soles stay on the floor through the cycle.
  */
 export function Character() {
   const root = useRef<THREE.Group>(null);
-  const joints = useRef<Record<string, THREE.Group | null>>({});
-  const hair = useRef<THREE.Group>(null);
-
-  const mats = characterMaterials();
   const blob = useBlobShadow();
   const quality = useQuality();
-  const settings = useNexusStore((s) => s.settings);
-
-  const rig = useMemo(() => buildRig(), []);
-
-  const phase = useRef(0);
   const facing = useRef(playerState.yaw);
-  const turnRate = useRef(0);
-  const poseRef = useRef<Pose | null>(null);
+  const settings = useNexusStore((s) => s.settings);
+  const rig = useProtagonist();
 
-  useFrame((state, rawDelta) => {
+  useFrame((_, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05);
-    const rootGroup = root.current;
-    if (!rootGroup) return;
+    const group = root.current;
+    if (!group) return;
 
-    const speed = playerState.speed;
     const moving = playerState.moving;
-    const motion = settings.motion === "reduced" ? 0.2 : 1;
-
-    // Turn toward travel, or face the camera when standing still.
     const targetFacing = moving
       ? Math.atan2(-playerState.velocity.x, -playerState.velocity.z)
       : playerState.yaw;
     const difference = shortestAngle(facing.current, targetFacing);
-    const turnStep = difference * Math.min(1, delta * (moving ? 9 : 6));
-    facing.current += turnStep;
-    turnRate.current = turnStep / Math.max(delta, 0.0001);
+    const turn = difference * Math.min(1, delta * (moving ? 9 : 6));
+    facing.current += turn * (settings.motion === "reduced" ? 0.6 : 1);
 
-    rootGroup.position.set(
-      playerState.position.x,
-      playerState.position.y,
-      playerState.position.z,
-    );
-    rootGroup.rotation.y = facing.current;
-
-    phase.current = gaitPhase(phase.current, speed, delta, playerState.sprinting);
-
-    const inputs: PoseInputs = {
-      time: state.clock.elapsedTime,
-      speed,
-      sprinting: playerState.sprinting,
-      moving,
-      turnRate: turnRate.current,
-      motion,
-      lookYaw: shortestAngle(facing.current, playerState.yaw),
-      lookPitch: playerState.pitch,
-    };
-
-    const target = computePose(inputs, phase.current);
-    const previous = poseRef.current ?? target;
-    const blended = blendPose(previous, target, 14, delta);
-    poseRef.current = blended;
-
-    rootGroup.position.y += blended.root.y;
-
-    const apply = (
-      name: string,
-      rotation: { rotX: number; rotY?: number; rotZ?: number },
-    ) => {
-      const group = joints.current[name];
-      if (!group) return;
-      group.rotation.set(rotation.rotX, rotation.rotY ?? 0, rotation.rotZ ?? 0, "YXZ");
-    };
-
-    apply("hips", blended.hips);
-    apply("spine", blended.spine);
-    apply("chest", blended.chest);
-    apply("neck", blended.neck);
-    apply("head", blended.head);
-    apply("shoulderL", blended.shoulderL);
-    apply("shoulderR", blended.shoulderR);
-    apply("elbowL", blended.elbowL);
-    apply("elbowR", blended.elbowR);
-    apply("wristL", blended.wristL);
-    apply("wristR", blended.wristR);
-    apply("thighL", blended.thighL);
-    apply("thighR", blended.thighR);
-    apply("kneeL", blended.kneeL);
-    apply("kneeR", blended.kneeR);
-    apply("ankleL", blended.ankleL);
-    apply("ankleR", blended.ankleR);
-
-    if (hair.current) {
-      hair.current.rotation.x = blended.hairSwing;
-      hair.current.rotation.z = blended.hairSwing * 0.4;
-    }
+    group.position.set(playerState.position.x, playerState.position.y, playerState.position.z);
+    group.rotation.y = facing.current;
   });
-
-  /** Renders one rig node: a joint group with its meshes, then its children. */
-  const renderNode = (node: RigNode) => (
-    <group
-      key={node.name}
-      position={node.position}
-      rotation={node.rotation ? [node.rotation[0], node.rotation[1], node.rotation[2]] : undefined}
-      scale={node.scale ?? 1}
-      ref={(group) => {
-        if (!group) return;
-        if (node.joint) joints.current[node.joint] = group;
-        if (node.name === "hair") hair.current = group;
-      }}
-    >
-      {node.parts.map((part) => (
-        <mesh
-          key={part.key}
-          geometry={part.geometry}
-          material={mats[part.material]}
-          castShadow={part.shadow ?? false}
-          receiveShadow={part.shadow ?? false}
-        />
-      ))}
-      {node.children.map(renderNode)}
-    </group>
-  );
 
   return (
     <group ref={root} rotation={[0, playerState.yaw, 0]}>
       {blob && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.016, 0]}>
-          <planeGeometry args={[1.25, 1.05]} />
+          <planeGeometry args={[0.95, 0.8]} />
           <meshBasicMaterial
             map={blob}
             transparent
@@ -189,14 +228,15 @@ export function Character() {
       <pointLight position={[0.6, 1.9, -0.9]} intensity={2.4} distance={4.5} color="#d9f2ff" decay={2} />
       <pointLight position={[-0.5, 1.5, 1.1]} intensity={1.4} distance={3.6} color="#ffd9b8" decay={2} />
 
-      {rig.children.map(renderNode)}
+      {rig && <ProtagonistRig rig={rig} />}
 
       {quality.id !== "performance" && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
-          <ringGeometry args={[0.42, 0.46, 40]} />
+          <ringGeometry args={[0.4, 0.44, 40]} />
           <meshBasicMaterial color="#46e6ff" transparent opacity={0.05} toneMapped={false} />
         </mesh>
       )}
     </group>
   );
 }
+

@@ -5,8 +5,8 @@ A game-grade, fully explorable 3D portfolio for **Mohammad Ali Ashnavar**
 built as a real production website rather than a demo reel.
 
 You arrive in a six-sided central atrium with an identity hologram. The intro camera
-frames the protagonist — a fully procedural, third-person avatar in a technical bodysuit
-and heels — then hands the boom over and you walk with her through six connected sectors:
+frames the protagonist — a rigged, animated character in a technical flight suit — then
+hands the boom over and you walk with her through six connected sectors:
 
 | Sector | What is inside |
 | --- | --- |
@@ -91,8 +91,9 @@ WebGL-unavailable fallback that keeps every link and every fact reachable.
 
 Next.js 15 (App Router) · React 19 · TypeScript (strict) · Tailwind CSS v4 ·
 three.js + React Three Fiber + Drei + postprocessing · GSAP + Framer Motion · Zustand ·
-Zod. All textures, materials, geometry, HUD chrome and audio are generated in the
-project — no third-party art, no CDN font fetches, no autoplaying sound.
+Zod. The facility, props, textures, HUD chrome and audio are generated in the project:
+no CDN font fetches, no autoplaying sound. The one imported asset is the protagonist's
+body mesh (CC0, see below).
 
 ## Documentation
 
@@ -104,7 +105,7 @@ project — no third-party art, no CDN font fetches, no autoplaying sound.
 | [04 — Deployment](docs/04-deployment.md) | Vercel, Node, Nginx + TLS + DNS, Docker, headers, post-deploy checks |
 | [05 — Verification](docs/05-verification.md) | The five harnesses, what they prove, what is not automated |
 | [06 — Content guide](docs/06-content-guide.md) | Editing content, accuracy rules, adding missions/skills |
-| [07 — Character & camera](docs/07-character.md) | The avatar rig, pose solver, footwear profile, third-person boom, render pipeline |
+| [07 — Character & camera](docs/07-character.md) | The character asset, suit shader, animation blending, grounding, third-person boom |
 
 ## Accuracy policy
 
@@ -124,5 +125,15 @@ This portfolio documents engineering work without inflating it:
 Application code: © Mohammad Ali Ashnavar. Fonts: Rajdhani and IBM Plex Mono via
 Fontsource under the SIL Open Font License. Three.js, React Three Fiber, Drei,
 postprocessing, Next.js, GSAP, Framer Motion, Zustand and Zod retain their own licences.
-No copyrighted game environments, characters, assets, UI or audio were reproduced; all
-geometry, textures, HUD design and sound are original to this project.
+
+**Character asset.** The protagonist's body mesh is *Woman Base Mesh* by
+[Grab3D](https://grab3d.com), redistributed by
+[harikishanbs88/woman-base-character](https://github.com/harikishanbs88/woman-base-character)
+under [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/legalcode)
+(public domain dedication; see `public/models/LICENSE-woman-base-mesh.txt`). The original
+mesh is 305,702 triangles with 4K maps and was published as AI-assisted (Meshy shape-from-
+photo, cleaned up in Blender); for the web it has been decimated to 60,000 triangles,
+re-textured at 1K, and adapted as described in
+[docs/03-assets.md](docs/03-assets.md). Everything else — the facility, props, textures,
+HUD, and audio — is original to this project, and no copyrighted game environment,
+character, interface or sound is reproduced.
