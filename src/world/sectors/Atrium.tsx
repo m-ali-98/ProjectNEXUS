@@ -14,6 +14,7 @@ import { useQuality } from "@/lib/quality";
 import { useNexusStore } from "@/stores/nexusStore";
 import { Text } from "@/world/environment/Text3D";
 import { LimitedLights } from "@/world/environment/Lighting";
+import { profile } from "@/content/profile";
 
 function IdentityDisplay() {
   const scan = useRef<THREE.Mesh>(null);
@@ -66,7 +67,7 @@ function IdentityDisplay() {
           maxWidth={10.4}
           textAlign="center"
         >
-          MOHAMMAD ALI ASHNAVAR
+          {profile.name.toUpperCase()}
         </Text>
         <Text
           font={FONT_MONO}
@@ -77,7 +78,7 @@ function IdentityDisplay() {
           letterSpacing={0.42}
           position={[0, -0.14, 0.05]}
         >
-          SOFTWARE ENGINEER
+          {profile.title.toUpperCase()}
         </Text>
         <Text
           font={FONT_MONO}
@@ -88,7 +89,7 @@ function IdentityDisplay() {
           letterSpacing={0.3}
           position={[0, -0.66, 0.05]}
         >
-          APPLICATIONS / SYSTEMS / INFRASTRUCTURE
+          {profile.specialisation.toUpperCase()}
         </Text>
         <Text
           font={FONT_MONO}
@@ -99,7 +100,7 @@ function IdentityDisplay() {
           letterSpacing={0.42}
           position={[0, -1.2, 0.05]}
         >
-          NEXUS — INTERACTIVE ENGINEERING ENVIRONMENT
+          {`NEXUS / ${profile.shortName.toUpperCase()}`}
         </Text>
       </Billboard>
       <mesh ref={scan} position={[0, 0, 0.06]}>

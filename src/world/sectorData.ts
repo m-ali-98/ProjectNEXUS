@@ -8,6 +8,7 @@
  */
 import type { SectorId } from "@/content/sectors";
 import type { PanelState } from "@/stores/nexusStore";
+import { getProject } from "@/content/projects";
 
 export type PropType =
   | "rack"
@@ -521,14 +522,7 @@ export const archiveInteractions: LocalInteraction[] = [
     kind: "exhibit" as InteractionKind,
     sector: "project-archive" as SectorId,
     code: `M-${p.id.slice(-3)}`,
-    label:
-      p.id === "mission-001"
-        ? "Khuzestan Yeast Platform"
-        : p.id === "mission-002"
-          ? "React Native Chat"
-          : p.id === "mission-003"
-            ? "Production Infrastructure"
-            : "Business Automation",
+    label: getProject(p.id)?.title ?? "Mission",
     verb: "ACCESS MISSION",
     x: p.x * 0.72,
     y: 1.6,

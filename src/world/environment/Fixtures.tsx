@@ -11,6 +11,7 @@ import { useQuality } from "@/lib/quality";
 import type { LocalProp } from "@/world/sectorData";
 import { sectorProps } from "@/world/sectorData";
 import { Text } from "./Text3D";
+import { getProject } from "@/content/projects";
 
 // ---------------------------------------------------------------------------
 // Console — the standard operable terminal
@@ -777,24 +778,13 @@ function MonolithByVariant({ prop }: { prop: LocalProp }) {
   if (!prop.variant?.startsWith("mission-")) {
     return <GenericMonolith title={prop.text ?? "ARCHIVE"} />;
   }
-  const mission = prop.variant?.split("-")[1] ?? "001";
-  const titles: Record<string, string> = {
-    "001": "Khuzestan Yeast Platform",
-    "002": "React Native Chat",
-    "003": "Production Infrastructure",
-    "004": "Business Automation",
-  };
-  const codes: Record<string, string> = {
-    "001": "KHY-PLATFORM",
-    "002": "RN-CHAT",
-    "003": "OPS-DEPLOY",
-    "004": "BIZ-AUTO",
-  };
+  const project = getProject(prop.variant ?? "");
+  if (!project) return <GenericMonolith title={prop.text ?? "ARCHIVE"} />;
   return (
     <ProjectMonolith
-      missionNo={mission}
-      title={titles[mission] ?? "Mission"}
-      code={codes[mission] ?? "MISSION"}
+      missionNo={project.missionNo}
+      title={project.title}
+      code={project.code}
       accent="cyan"
     />
   );
