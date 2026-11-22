@@ -3,6 +3,7 @@
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
+import { MeshReflectorMaterial } from "@react-three/drei";
 
 import { M, ACCENT_HEX, type Accent } from "./materials";
 import { screenTexture, type ScreenVariant } from "./proceduralUI";
@@ -541,6 +542,30 @@ export function AtriumShell({ height = ATRIUM.height }: { height?: number }) {
         <circleGeometry args={[ATRIUM.radius + 2, 6]} />
         <primitive object={M().floorAtrium} attach="material" />
       </mesh>
+
+      {/* polished sheen: a blurred planar reflection, ULTRA only */}
+      {quality.floorReflections && (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.022, 0]}>
+          <circleGeometry args={[ATRIUM.radius + 2, 6]} />
+          <MeshReflectorMaterial
+            resolution={512}
+            mixBlur={2.4}
+            mixStrength={0.5}
+            blur={[420, 130]}
+            mirror={0.65}
+            depthScale={1}
+            minDepthThreshold={0.4}
+            maxDepthThreshold={1.3}
+            depthToBlurRatioBias={0.25}
+            distortion={0.12}
+            metalness={0.55}
+            roughness={0.55}
+            color="#0b1118"
+            transparent
+            opacity={0.62}
+          />
+        </mesh>
+      )}
 
       {/* centre inlay ring */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>

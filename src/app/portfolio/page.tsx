@@ -86,9 +86,9 @@ export default function PortfolioPage() {
             <div className="nx-hud-panel p-4">
               <div className="nx-label mb-1.5">How this portfolio works</div>
               <p className="text-[12px] leading-relaxed text-ink-dim">
-                NEXUS is a real explorable 3D facility built with React Three Fiber: first-person
-                movement, interactive exhibits and sector architecture. This page is the conventional
-                equivalent — the same information without the game layer.
+                NEXUS is a real explorable 3D facility built with React Three Fiber: a
+                third-person protagonist, interactive exhibits and sector architecture. This page is
+                the conventional equivalent — the same information without the game layer.
               </p>
             </div>
           </aside>

@@ -187,19 +187,34 @@ export function Atrium() {
       </mesh>
 
       {/* architectural lighting */}
-      <ambientLight intensity={0.32} color="#8fb6c8" />
-      <hemisphereLight args={["#35606f", "#05070a", 0.45]} />
+      <ambientLight intensity={0.22} color="#8fb6c8" />
+      <hemisphereLight args={["#35606f", "#05070a", 0.38]} />
       {quality.shadows && (
         <spotLight
           position={[0, 17.2, 0]}
           angle={0.62}
           penumbra={0.85}
-          intensity={110}
-          distance={40}
-          color="#bfe9ff"
+          intensity={130}
+          distance={42}
+          color="#c8ecff"
           castShadow
           shadow-mapSize={[quality.shadowMapSize, quality.shadowMapSize]}
-          shadow-bias={-0.0006}
+          shadow-bias={-0.0004}
+          shadow-normalBias={0.022}
+          shadow-camera-near={4}
+          shadow-camera-far={30}
+        />
+      )}
+      {/* cool rim from the opposite side: separates silhouettes from the fog */}
+      {quality.id !== "performance" && (
+        <spotLight
+          position={[-11, 9.5, -9]}
+          angle={0.78}
+          penumbra={1}
+          intensity={38}
+          distance={34}
+          color="#5fb6e8"
+          decay={2}
         />
       )}
       <LimitedLights>

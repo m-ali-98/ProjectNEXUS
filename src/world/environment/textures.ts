@@ -30,7 +30,7 @@ function finish(
   tex.wrapT = THREE_NS.RepeatWrapping;
   tex.colorSpace = opts.srgb ? THREE_NS.SRGBColorSpace : THREE_NS.NoColorSpace;
   tex.repeat.set(opts.repeat?.[0] ?? 1, opts.repeat?.[1] ?? 1);
-  tex.anisotropy = opts.anisotropy ?? 4;
+  tex.anisotropy = opts.anisotropy ?? 8;
   tex.needsUpdate = true;
   cache.set(key, tex);
   return tex;
@@ -49,7 +49,9 @@ export function floorGridTexture(accent = "#46e6ff", repeat = 14): THREE.Texture
   const key = `floorGrid:${accent}:${repeat}`;
   const cached = cache.get(key);
   if (cached) return cached;
-  const { canvas, ctx } = makeCanvas(512);
+  // Draw in a 512-unit space onto a 1024² canvas: same layout, twice the detail.
+  const { canvas, ctx } = makeCanvas(1024);
+  ctx.scale(2, 2);
   ctx.fillStyle = "#080b0f";
   ctx.fillRect(0, 0, 512, 512);
 
@@ -187,6 +189,75 @@ export function roughnessNoise(repeat: [number, number] = [3, 3]): THREE.Texture
     img.data[i + 1] = v;
     img.data[i + 2] = v;
     img.data[i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  return finish(key, canvas, { repeat });
+}
+
+/**
+ * Normal map generated from a height field.
+ *
+ * Used to give floors and wall panels real relief instead of relying on albedo
+ * contrast alone: seams catch the key light, and grazing angles pick up the
+ * micro-surface. 256² with a 4-tap Sobel is cheap and repeatable.
+ */
+export function normalTexture(
+  kind: "panel" | "concrete" | "grid" = "panel",
+  repeat: [number, number] = [2, 2],
+  strength = 2.4,
+): THREE.Texture {
+  const key = `normal:${kind}:${repeat.join(",")}:${strength}`;
+  const cached = cache.get(key);
+  if (cached) return cached;
+
+  const size = 256;
+  const { canvas, ctx } = makeCanvas(size);
+  const height = new Float32Array(size * size);
+  const rand = rng(kind === "panel" ? 91 : kind === "concrete" ? 17 : 43);
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      let h = 0;
+      if (kind === "panel") {
+        // bevelled panel grid with rivets
+        const cell = 64;
+        const dx = Math.min(x % cell, cell - (x % cell));
+        const dy = Math.min(y % cell, cell - (y % cell));
+        const edge = Math.min(dx, dy);
+        h = edge < 6 ? 0.25 + edge / 24 : 0.7;
+        const rx = x % cell - cell / 2;
+        const ry = y % cell - cell / 2;
+        if (rx * rx + ry * ry < 9) h += 0.35;
+        h += (rand() - 0.5) * 0.12;
+      } else if (kind === "concrete") {
+        h = 0.5 + (rand() - 0.5) * 0.5;
+        h += Math.sin(x * 0.13) * Math.sin(y * 0.11) * 0.12;
+      } else {
+        // thin grout lines every 32 px
+        const line = x % 32 < 2 || y % 32 < 2;
+        h = (line ? 0.15 : 0.6) + (rand() - 0.5) * 0.1;
+      }
+      height[y * size + x] = h;
+    }
+  }
+
+  const img = ctx.createImageData(size, size);
+  const at = (x: number, y: number) =>
+    height[((y + size) % size) * size + ((x + size) % size)];
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = (at(x + 1, y) - at(x - 1, y)) * strength;
+      const dy = (at(x, y + 1) - at(x, y - 1)) * strength;
+      const nx = -dx;
+      const ny = -dy;
+      const nz = 1;
+      const len = Math.hypot(nx, ny, nz);
+      const i = (y * size + x) * 4;
+      img.data[i] = Math.round(((nx / len) * 0.5 + 0.5) * 255);
+      img.data[i + 1] = Math.round(((ny / len) * 0.5 + 0.5) * 255);
+      img.data[i + 2] = Math.round(((nz / len) * 0.5 + 0.5) * 255);
+      img.data[i + 3] = 255;
+    }
   }
   ctx.putImageData(img, 0, 0);
   return finish(key, canvas, { repeat });

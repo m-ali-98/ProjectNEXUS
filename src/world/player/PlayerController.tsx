@@ -5,13 +5,9 @@ import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useNexusStore } from "@/stores/nexusStore";
 import { PLAYER, resolveCollisions } from "@/world/worldLayout";
-import {
-  consumeLook,
-  eyePosition,
-  input,
-  playerState,
-} from "@/world/player/playerState";
+import { consumeLook, input, playerState } from "@/world/player/playerState";
 import { cameraRef, director as directorRef } from "@/world/camera/director";
+import { THIRD_PERSON, thirdPersonPose } from "@/world/camera/thirdPerson";
 import { getAudio } from "@/world/audio/audioEngine";
 import { isTouchDevice } from "@/world/player/pointerLock";
 import { sectorPlacements } from "@/world/worldLayout";
@@ -138,7 +134,10 @@ export function PlayerController() {
       const sens = 0.0021 * settings.sensitivity;
       playerState.yaw -= look.x * sens;
       playerState.pitch -= look.y * sens * (settings.invertY ? -1 : 1);
-      playerState.pitch = Math.max(-PLAYER.maxPitch, Math.min(PLAYER.maxPitch, playerState.pitch));
+      playerState.pitch = Math.max(
+        THIRD_PERSON.pitchMin,
+        Math.min(THIRD_PERSON.pitchMax, playerState.pitch),
+      );
     } else {
       consumeLook();
     }
@@ -232,9 +231,14 @@ export function PlayerController() {
       return;
     }
 
-    const eye = eyePosition(new THREE.Vector3());
-    cam.position.set(eye.x, eye.y, eye.z);
-    cam.rotation.set(playerState.pitch, playerState.yaw, 0, "YXZ");
+    // Third-person boom. The camera eases toward the solved pose so wall
+    // shrinks and steps do not snap the frame.
+    const pose = thirdPersonPose((gateSector) => !!store.openedPortals[gateSector]);
+    const ease = 1 - Math.exp(-(pose.distance < 1.4 ? 26 : 14) * delta);
+    cam.position.lerp(pose.position, ease);
+    const look = pose.lookAt.clone();
+    // Keep the aim stable while easing in.
+    cam.lookAt(look);
     void state;
   });
 

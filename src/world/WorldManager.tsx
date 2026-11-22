@@ -16,6 +16,7 @@ import { NetworkOperations } from "@/world/sectors/NetworkOperations";
 import { ProjectArchive } from "@/world/sectors/ProjectArchive";
 import { PersonalQuarters } from "@/world/sectors/PersonalQuarters";
 import { PlayerController } from "@/world/player/PlayerController";
+import { Character } from "@/world/character/Character";
 import { InteractionSystem } from "@/world/interactions/InteractionSystem";
 import { InteractionMarkers } from "@/world/interactions/InteractionMarkers";
 import { PostFX } from "@/world/effects/PostFX";
@@ -113,10 +114,11 @@ function IBL() {
   return (
     <Environment resolution={quality.envResolution} frames={1} background={false}>
       <color attach="background" args={["#05090c"]} />
-      <Lightformer intensity={1.6} color="#5fa8c4" position={[0, 12, 0]} scale={[24, 24, 1]} rotation={[-Math.PI / 2, 0, 0]} />
-      <Lightformer intensity={0.9} color="#f2a93b" position={[-14, 6, -10]} scale={[12, 12, 1]} rotation={[0, Math.PI / 3, 0]} />
-      <Lightformer intensity={0.8} color="#3f7fa8" position={[16, 5, 12]} scale={[12, 12, 1]} rotation={[0, -Math.PI / 3, 0]} />
-      <Lightformer intensity={0.5} color="#1b2b33" position={[0, -4, 0]} scale={[30, 30, 1]} rotation={[Math.PI / 2, 0, 0]} />
+      <Lightformer intensity={2.1} color="#7cc6de" position={[0, 12, 0]} scale={[26, 26, 1]} rotation={[-Math.PI / 2, 0, 0]} />
+      <Lightformer intensity={1.1} color="#f2a93b" position={[-14, 6, -10]} scale={[12, 12, 1]} rotation={[0, Math.PI / 3, 0]} />
+      <Lightformer intensity={1} color="#3f7fa8" position={[16, 5, 12]} scale={[12, 12, 1]} rotation={[0, -Math.PI / 3, 0]} />
+      <Lightformer intensity={0.7} color="#dff4ff" position={[0, 5, 15]} scale={[16, 8, 1]} />
+      <Lightformer intensity={0.55} color="#2a4d5e" position={[0, -4, 0]} scale={[30, 30, 1]} rotation={[Math.PI / 2, 0, 0]} />
     </Environment>
   );
 }
@@ -125,10 +127,11 @@ export function WorldManager() {
   return (
     <>
       <SceneBackground />
+      <fogExp2 attach="fog" args={["#05090c", 0.0135]} />
       <Atmosphere />
       <IBL />
-      <ambientLight intensity={0.16} color="#8aa6b8" />
-      <hemisphereLight args={["#24404c", "#040607", 0.28]} />
+      <ambientLight intensity={0.12} color="#8aa6b8" />
+      <hemisphereLight args={["#24404c", "#040607", 0.22]} />
 
       <Suspense fallback={null}>
         <Atrium />
@@ -136,6 +139,7 @@ export function WorldManager() {
         <SectorStreamer />
       </Suspense>
 
+      <Character />
       <PlayerController />
       <InteractionSystem />
       <InteractionMarkers />

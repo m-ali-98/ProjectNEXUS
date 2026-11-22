@@ -3,8 +3,8 @@ import { useNexusStore, type PanelState } from "@/stores/nexusStore";
 import { getSector, type SectorId } from "@/content/sectors";
 import { cameraRef, director } from "./director";
 import { exhibitPose } from "./framing";
+import { thirdPersonPose } from "./thirdPerson";
 import {
-  eyePosition,
   exitSectorToAtrium,
   playerState,
   spawnInSector,
@@ -111,17 +111,13 @@ export function focusOnInteraction(id: string, camera: THREE.PerspectiveCamera) 
 
 /** Return the camera to the player's eyes, then hand back control. */
 export function releaseCamera(camera: THREE.PerspectiveCamera) {
-  const eye = eyePosition(new THREE.Vector3());
-  const forward = new THREE.Vector3(
-    -Math.sin(playerState.yaw) * Math.cos(playerState.pitch),
-    Math.sin(playerState.pitch),
-    -Math.cos(playerState.yaw) * Math.cos(playerState.pitch),
-  ).add(eye);
+  // Return to the third-person boom rather than the old first-person eye.
+  const pose = thirdPersonPose((sector) => !!useNexusStore.getState().openedPortals[sector]);
   director.shot(camera, {
-    position: eye,
-    lookAt: forward,
-    duration: 0.55,
-    ease: "power2.out",
+    position: pose.position.clone(),
+    lookAt: pose.lookAt.clone(),
+    duration: 0.62,
+    ease: "power2.inOut",
     hold: false,
   });
 }

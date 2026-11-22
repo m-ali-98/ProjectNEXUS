@@ -17,16 +17,19 @@ export default function WorldCanvas() {
       gl={{
         antialias: quality.id !== "performance",
         powerPreference: "high-performance",
+        precision: "highp",
         alpha: false,
         stencil: false,
         depth: true,
         preserveDrawingBuffer: false,
       }}
-      camera={{ fov: 75, near: 0.06, far: 240, position: [0, 1.68, 10.5] }}
+      camera={{ fov: 72, near: 0.08, far: 240, position: [0.32, 1.75, 13.6] }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping;
-        gl.toneMappingExposure = 1.08;
+        gl.toneMappingExposure = 1.05;
         gl.outputColorSpace = THREE.SRGBColorSpace;
+        gl.shadowMap.type = THREE.PCFSoftShadowMap;
+        gl.shadowMap.enabled = quality.shadows;
       }}
     >
       <Suspense fallback={null}>

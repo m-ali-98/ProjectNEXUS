@@ -38,10 +38,11 @@ src/
     WorldManager.tsx    scene graph, IBL, atmosphere, sector streaming, systems
     environment/        procedural textures/materials, architecture, fixtures, effects
     sectors/            7 room components + shared room shell + holographic core
-    player/             pointer lock, player state, first-person controller
-    camera/             shot director, cinematics (travel/tour/panels), intro camera
+    player/             pointer lock, player state, third-person controller
+    character/          procedural protagonist: data, pose solver, materials, head, body, rig
+    camera/             thirdPerson boom, shot director, cinematics, intro camera
     interactions/       interaction registry, focus raycasts, in-world markers
-    effects/PostFX.tsx  quality-gated bloom/vignette/grade
+    effects/PostFX.tsx  quality-gated SSAO/bloom/grade/aberration/vignette/grain
     audio/audioEngine.ts procedural Web Audio buses
 ```
 
@@ -104,17 +105,49 @@ geometry and materials are disposed by R3F.
 
 ## Camera contract
 
+The game is third person: the camera rides a spring arm behind the protagonist and she is
+the subject of every framing.
+
 Three systems can touch the camera; the rule that keeps them stable:
 
 - `director` owns the camera **only** while a shot is active (including `hold`).
 - `IntroCamera` runs the arrival shot and releases on completion or on skip.
-- `PlayerController` writes the camera every frame **unless** `director.active`, and it
-  owns the eye height/bob/head-roll.
+- `PlayerController` writes the camera every frame **unless** `director.active`: it takes
+  the solved boom pose (or the player's eye while a panel is focused) and eases toward it.
 - Opening a panel calls `focusOnInteraction`, which sets a holding shot; closing calls
   `closePanelAndResume`, which releases the camera and re-locks the pointer.
 
+The boom is solved by `camera/thirdPerson.ts` (`thirdPersonPose`): pivot 1.5 m up and
+0.32 m to her right, 3.25 m back, aimed 9 m along the view direction. A 12-step probe
+against the real collider set shortens the arm (down to 0.85 m) and keeps 0.32 m of floor
+clearance, so a wall behind her pulls the camera in instead of clipping through it.
+Details and the reasoning behind the numbers: [07 — Character & camera](07-character.md).
+
 `cameraRef` (in `world/camera/director.ts`) is the single handle non-React code uses to
 reach the live `PerspectiveCamera`.
+
+## Render pipeline
+
+`WorldManager` sets the scene once (`fogExp2`, drei `Environment` IBL with lightformers,
+ambient/hemisphere fill) and `WorldCanvas` configures the renderer: ACES filmic tone
+mapping, sRGB output, PCF soft shadows, device-pixel-ratio range from the quality profile.
+Geometry is PBR throughout — `MeshStandardMaterial` for architecture, `MeshPhysicalMaterial`
+with clearcoat/sheen for the character — and every surface detail (floor grids, hex plates,
+panel relief, concrete grain, fabric weave, skin pores) is generated as a canvas texture
+or normal map at runtime. `PostFX` composes the post chain:
+
+| Pass | ULTRA | HIGH | PERFORMANCE |
+| --- | --- | --- | --- |
+| SSAO (contact shadows) | ✓ 65 % res | — | — |
+| Bloom (mipmap blur) | ✓ | ✓ | — |
+| Saturation/contrast grade | ✓ | ✓ | — |
+| Chromatic aberration | 0.0006 | 0.00028 | — |
+| Vignette + grain | ✓ | ✓ | — |
+| MSAA on composer target | 4× | 2× | — |
+| Planar floor reflections | ✓ | — | — |
+
+The composer is skipped entirely on PERFORMANCE, which renders straight to the canvas;
+`AdaptiveResolution` still trims the DPR if the frame budget slips.
 
 ## State
 

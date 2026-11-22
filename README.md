@@ -4,8 +4,9 @@ A game-grade, fully explorable 3D portfolio for **Mohammad Ali Ashnavar**
 (Software Engineer · Application Development · Systems Integration · IT Infrastructure),
 built as a real production website rather than a demo reel.
 
-You arrive in a six-sided central atrium with an identity hologram, then walk — real
-first-person movement, real collision, real doors — through six connected sectors:
+You arrive in a six-sided central atrium with an identity hologram. The intro camera
+frames the protagonist — a fully procedural, third-person avatar in a technical bodysuit
+and heels — then hands the boom over and you walk with her through six connected sectors:
 
 | Sector | What is inside |
 | --- | --- |
@@ -41,11 +42,14 @@ Full instructions: [docs/01-setup.md](docs/01-setup.md).
 
 ## Controls
 
+Third person by default: the camera orbits a spring arm behind the player and pulls in
+when a wall gets between it and her.
+
 | Input | Action |
 | --- | --- |
 | Click | Engage pointer lock |
 | `W A S D` | Move · `Shift` sprint |
-| Mouse | Look |
+| Mouse | Orbit the camera (she turns to match when idle) |
 | `E` | Interact with the focused object |
 | `M` | Facility map / fast travel |
 | `Esc` | Pause (Resume · Map · Tour · Settings · Profile · Projects · Contact · Exit) |
@@ -68,7 +72,11 @@ On touch devices a thumb-stick and action buttons replace pointer lock.
 - **Sector streaming.** Rooms mount within 62 m and unmount beyond it, so the scene graph
   and GPU budget stay small.
 - **Quality profiles** (ULTRA / HIGH / PERFORMANCE) drive every renderer knob from one
-  table, with first-run detection and a persisted choice.
+  table, with first-run detection and a persisted choice — resolution scale, shadow map
+  size, light budget, bloom, SSAO, MSAA, planar floor reflections, particle count.
+- **Graphic upgrade path.** PMREM image-based lighting, ACES tone mapping, generated
+  normal maps on floors and panelling, clearcoat bodysuit with pore-level skin relief,
+  and a post chain of SSAO → bloom → grade → aberration → vignette → grain.
 
 ## Routes
 
@@ -96,6 +104,7 @@ project — no third-party art, no CDN font fetches, no autoplaying sound.
 | [04 — Deployment](docs/04-deployment.md) | Vercel, Node, Nginx + TLS + DNS, Docker, headers, post-deploy checks |
 | [05 — Verification](docs/05-verification.md) | The five harnesses, what they prove, what is not automated |
 | [06 — Content guide](docs/06-content-guide.md) | Editing content, accuracy rules, adding missions/skills |
+| [07 — Character & camera](docs/07-character.md) | The avatar rig, pose solver, footwear profile, third-person boom, render pipeline |
 
 ## Accuracy policy
 

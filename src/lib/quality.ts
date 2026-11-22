@@ -19,16 +19,24 @@ export type QualityProfile = {
   htmlScreens: boolean;
   anisotropy: number;
   lightCount: number;
+  /** Screen-space AO (expensive, ultra only). */
+  ssao: boolean;
+  /** MSAA samples for the post-processing render target. */
+  msaa: number;
+  /** Film grain strength, 0 disables the pass. */
+  grain: number;
+  /** Enables reflections on the atrium floor. */
+  floorReflections: boolean;
 };
 
 export const QUALITY_PROFILES: Record<Quality, QualityProfile> = {
   ultra: {
     id: "ultra",
     label: "ULTRA",
-    description: "Cinematic lighting, full shadows, bloom and volumetric shafts.",
-    dpr: [1, 1.85],
+    description: "Cinematic lighting: SSAO, planar floor reflections, full shadows, bloom and volumetric shafts.",
+    dpr: [1.1, 2],
     shadows: true,
-    shadowMapSize: 2048,
+    shadowMapSize: 3072,
     bloom: true,
     bloomIntensity: 0.85,
     bloomThreshold: 0.62,
@@ -41,12 +49,16 @@ export const QUALITY_PROFILES: Record<Quality, QualityProfile> = {
     htmlScreens: true,
     anisotropy: 8,
     lightCount: 4,
+    ssao: true,
+    msaa: 4,
+    grain: 0.03,
+    floorReflections: true,
   },
   high: {
     id: "high",
     label: "HIGH",
-    description: "Balanced: selective shadows, moderate post-processing.",
-    dpr: [0.85, 1.5],
+    description: "Balanced: soft shadows, normal-mapped surfaces and a lighter post chain.",
+    dpr: [0.95, 1.6],
     shadows: true,
     shadowMapSize: 1024,
     bloom: true,
@@ -61,11 +73,15 @@ export const QUALITY_PROFILES: Record<Quality, QualityProfile> = {
     htmlScreens: true,
     anisotropy: 4,
     lightCount: 3,
+    ssao: false,
+    msaa: 2,
+    grain: 0.018,
+    floorReflections: false,
   },
   performance: {
     id: "performance",
     label: "PERFORMANCE",
-    description: "Reduced effects and resolution for integrated graphics.",
+    description: "Reduced effects and resolution for integrated graphics; no post-processing.",
     dpr: [0.7, 1],
     shadows: false,
     shadowMapSize: 512,
@@ -81,6 +97,10 @@ export const QUALITY_PROFILES: Record<Quality, QualityProfile> = {
     htmlScreens: true,
     anisotropy: 2,
     lightCount: 2,
+    ssao: false,
+    msaa: 0,
+    grain: 0,
+    floorReflections: false,
   },
 };
 

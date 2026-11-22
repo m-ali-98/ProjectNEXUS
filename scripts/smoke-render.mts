@@ -108,6 +108,7 @@ const { ProjectArchive } = await import("../src/world/sectors/ProjectArchive");
 const { PersonalQuarters } = await import("../src/world/sectors/PersonalQuarters");
 const { Corridors } = await import("../src/world/environment/Architecture");
 const { InteractionMarkers } = await import("../src/world/interactions/InteractionMarkers");
+const { Character } = await import("../src/world/character/Character");
 const { renderToString } = await import("react-dom/server");
 const { Hud } = await import("../src/components/hud/Hud");
 
@@ -142,6 +143,7 @@ await run("ProjectArchive", React.createElement(ProjectArchive));
 await run("PersonalQuarters", React.createElement(PersonalQuarters));
 await run("Corridors", React.createElement(Corridors, { accentFor: () => "cyan" }));
 await run("InteractionMarkers", React.createElement(InteractionMarkers));
+await run("Character", React.createElement(Character));
 try {
   const html = renderToString(React.createElement(Hud));
   results.push(`Hud: rendered ${html.length} chars of markup`);

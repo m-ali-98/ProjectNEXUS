@@ -65,8 +65,11 @@ Mounts each sector component and the corridor shell through
 TypeScript cannot see: bad geometry args, invalid material props, undefined refs, hooks
 used outside a canvas, and text that would trigger a font fetch.
 
-Current result: ~2 300 meshes across the seven rooms and corridors mount without a
-single error.
+The case list also mounts `Character` (the third-person protagonist rig) on its own, so a
+broken joint, material or shoe profile fails here rather than in the browser.
+
+Current result: ~2 300 meshes across the seven rooms, the corridors and the character
+mount without a single error.
 
 It also verified the glyph policy: before `Text3D` sanitising was added, in-world labels
 containing `—` or `→` made troika request a fallback font from `cdn.jsdelivr.net`; after
@@ -80,11 +83,26 @@ real store state, checking both that it renders and that key content is present:
 live label, sector banner, toast, tour caption, mobile controls and the WebGL fallback.
 34 assertions, all passing.
 
+### `scripts/validate-character.ts` (not part of `verify`)
+
+Replays the character's forward kinematics over idle, walk, run and sprint cycles and
+asserts the footwear actually plants: no sole sinks more than 2 cm below the floor, the
+swing foot clears it, and the crown height matches `characterData.ts`. It shares the real
+`SHOE_PROFILE`/`SOLE_CONTACT` numbers with `Body.tsx`, so mesh and measurement cannot drift.
+
+```bash
+npx tsx scripts/validate-character.ts
+```
+
+Current result: errors 0 — deepest sole −0.017 m (sprint), swing clearance 0.436 m,
+crown 1.756 m.
+
 ## What is not automated
 
 | Gap | Why | How to check manually |
 | --- | --- | --- |
-| Visual appearance | No GPU/browser in the build environment | `npm run dev`, walk the atrium, compare against the design tokens |
+| Visual appearance | No GPU/browser in the build environment | `npm run dev`, walk the atrium, compare against the design tokens and check the third-person framing |
+| Character fidelity | Subjective beyond the grounding assertions | `npm run dev`: idle, walk and sprint her through the atrium; check hands, face and heels up close in a panel shot |
 | Pointer lock, mouse feel | Requires a real input device | Chrome/Firefox: click to engage, `Esc` releases |
 | Frame rate | Hardware dependent | Open Settings → Quality, try all three profiles |
 | Touch controls | Requires a touch device or emulation | DevTools device mode |
