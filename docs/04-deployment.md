@@ -133,6 +133,9 @@ behaviour, not a failure.
 - Quality auto-detection stores its decision in `localStorage` (`nexus-quality-set`).
   Delete that key to re-run detection, or use Settings → Quality.
 - The PERFORMANCE profile caps device pixel ratio at 1, disables shadows, bloom and
-  reflections, and cuts particles; a touch control layer replaces pointer lock on mobile.
+  reflections, cuts particles and halves the room light budget; a touch control layer
+  replaces pointer lock on mobile.
+- Adaptive resolution is on by default: the pixel ratio moves down inside the profile's
+  range when the frame rate dips below 50 FPS and climbs back when there is headroom.
 - Verify the production build with `npm run verify` before deploying — it exercises the
   world, the interactions and every overlay without a browser.

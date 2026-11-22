@@ -137,9 +137,18 @@ localStorage under `nexus-settings-v1`.
 `QUALITY_PROFILES` (ultra / high / performance) is the only place renderer knobs are
 defined: DPR range, shadow map size, bloom intensity/threshold, reflections,
 volumetric shafts, particle counts, dust motes, IBL resolution, anisotropy and per-room
-light count. `useQuality()` returns the active profile and every component reads from it;
+light budget. `useQuality()` returns the active profile and every component reads from it;
 there is no second source of truth. First visit auto-detects a profile from device
 memory/cores/reduced-motion, then remembers the choice (`nexus-quality-set`).
+
+Two systems consume that profile continuously:
+
+- `LimitedLights` slices each room's point-light rig to `lightCount` (4 / 3 / 2), so the
+  performance profile actually removes lights instead of only lowering quality flags.
+- `AdaptiveResolution` samples the frame rate over 1.5 s windows and moves the renderer
+  pixel ratio inside the profile's `dpr` range — down below 50 FPS, slowly back up above
+  58 FPS. It is user-disableable in Settings. The canvas keeps its CSS size; only the
+  drawing buffer changes.
 
 ## Audio
 
@@ -159,3 +168,6 @@ sector-aware ambience bed.
 - Reduced motion follows `prefers-reduced-motion` and a manual toggle, which also
   disables scanline/sweep animations and shortens camera moves.
 - No information exists only inside the 3D scene.
+- Panel framing never clips through geometry: `exhibitPose` slides the inspection camera
+  back toward the player's eyes until it is clear, and the verifier asserts it for all 51
+  exhibit panels.

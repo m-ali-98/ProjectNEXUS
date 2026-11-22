@@ -21,16 +21,18 @@ export function IntroCamera() {
   useEffect(() => {
     if (phase !== "intro") return;
     const cam = camera as THREE.PerspectiveCamera;
-    const start = new THREE.Vector3(0, 13.6, 25);
-    const startLook = new THREE.Vector3(0, 4.2, 0);
+    // Inside the atrium shell (apothem 17 m) so the reveal never frames the
+    // exterior of the building.
+    const start = new THREE.Vector3(0, 11.6, 13.4);
+    const startLook = new THREE.Vector3(0, 5.4, -1.5);
     cam.position.copy(start);
     cam.lookAt(startLook);
     director.snap(start, startLook);
     director.active = true;
 
     director.shot(cam, {
-      position: new THREE.Vector3(0, 7.4, 15.5),
-      lookAt: new THREE.Vector3(0, 3.6, 0),
+      position: new THREE.Vector3(0, 6.6, 12.6),
+      lookAt: new THREE.Vector3(0, 3.4, 0),
       duration: 7,
       ease: "power1.inOut",
       hold: true,
@@ -39,8 +41,8 @@ export function IntroCamera() {
     const timer = window.setTimeout(() => {
       if (useNexusStore.getState().phase !== "intro") return;
       director.shot(cam, {
-        position: new THREE.Vector3(0, 2.55, 9.4),
-        lookAt: new THREE.Vector3(0, 2.7, 0),
+        position: new THREE.Vector3(0, 2.35, 10.9),
+        lookAt: new THREE.Vector3(0, 2.55, 0),
         duration: 9,
         ease: "sine.inOut",
         hold: true,

@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { useNexusStore, type PanelState } from "@/stores/nexusStore";
 import { getSector, type SectorId } from "@/content/sectors";
-import { cameraRef, director, inspectPose } from "./director";
+import { cameraRef, director } from "./director";
+import { exhibitPose } from "./framing";
 import {
   eyePosition,
   exitSectorToAtrium,
@@ -98,7 +99,7 @@ export async function returnToAtrium(fromSector: Exclude<SectorId, "atrium">) {
 export function focusOnInteraction(id: string, camera: THREE.PerspectiveCamera) {
   const interaction = getInteraction(id);
   if (!interaction) return;
-  const pose = inspectPose(interaction.position.clone(), playerState.position);
+  const pose = exhibitPose(interaction.position.clone(), playerState.position);
   director.shot(camera, {
     position: pose.position,
     lookAt: pose.lookAt,

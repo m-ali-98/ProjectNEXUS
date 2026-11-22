@@ -122,10 +122,20 @@ await check("FacilityMap", React.createElement(FacilityMap), /FAST TRAVEL|MAP/i)
 useNexusStore.setState({ overlay: "pause", paused: true });
 await check("PauseMenu", React.createElement(PauseMenu), /RESUME/i);
 
-useNexusStore.setState({ overlay: "none", paused: false });
-await check("TransitionOverlay", React.createElement(TransitionOverlay));
-await check("SectorBanner", React.createElement(SectorBanner));
-await check("ToastHost", React.createElement(ToastHost));
+useNexusStore.setState({
+  overlay: "none",
+  paused: false,
+  fade: "out",
+  transitioning: true,
+  transitionLabel: "TRANSIT - SYSTEMS CORE",
+  banner: { title: "Systems Core", subtitle: "Runtime architecture", code: "SEC-02" },
+  toast: { id: "t1", kind: "discovery", title: "Discovery recorded", body: "5 / 5 found" },
+  tourActive: true,
+  tourStep: 2,
+});
+await check("TransitionOverlay", React.createElement(TransitionOverlay), /TRANSIT/);
+await check("SectorBanner", React.createElement(SectorBanner), /Systems Core/);
+await check("ToastHost", React.createElement(ToastHost), /Discovery recorded/);
 await check("TourCaption", React.createElement(TourCaption));
 await check("MobileControls", React.createElement(MobileControls));
 await check("WebGLFallback", React.createElement(WebGLFallback), /WebGL|portfolio/i);

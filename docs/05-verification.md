@@ -27,8 +27,10 @@ compiles outside Next.
 | Non-portal interactions are ≥ 1.2 m apart | Two labels fighting for one raycast |
 | Every panel payload id resolves (`project`, `systemNode`, `pipeline`, `infraTerminal`, `labStation`, `dnsRecord`, `mailAuth`, `discovery`) | A panel that opens empty because content was renamed |
 | Room centres do not overlap | Interpenetrating rooms |
+| Each exhibit's inspection camera pose is outside geometry and at head height | Panels that open with the camera inside a wall or a console |
 
-Current result: 7/7 spawns clear, 76/76 interactions reachable, 0 warnings, 0 errors.
+Current result: 7/7 spawns clear, 76/76 interactions reachable, 51/51 exhibit poses clear
+(4 needed the automatic pull-back), 0 warnings, 0 errors.
 
 ### `scripts/validate-connectivity.ts` (`verify:connectivity`)
 
@@ -74,8 +76,9 @@ it, no external font request occurs.
 
 Client-renders (jsdom + `createRoot`) every overlay and every panel payload against a
 real store state, checking both that it renders and that key content is present:
-25 panel states, boot/intro overlay, facility map, pause menu, transition/banner/toast/
-tour overlays, mobile controls and the WebGL fallback. 34 assertions, all passing.
+25 panel states, boot/intro overlay, facility map, pause menu, transition overlay with a
+live label, sector banner, toast, tour caption, mobile controls and the WebGL fallback.
+34 assertions, all passing.
 
 ## What is not automated
 

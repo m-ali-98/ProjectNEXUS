@@ -19,6 +19,7 @@ import { PlayerController } from "@/world/player/PlayerController";
 import { InteractionSystem } from "@/world/interactions/InteractionSystem";
 import { InteractionMarkers } from "@/world/interactions/InteractionMarkers";
 import { PostFX } from "@/world/effects/PostFX";
+import { AdaptiveResolution } from "@/world/effects/AdaptiveResolution";
 import { playerState } from "@/world/player/playerState";
 import { IntroCamera } from "@/world/camera/IntroCamera";
 import { useNexusStore } from "@/stores/nexusStore";
@@ -140,6 +141,7 @@ export function WorldManager() {
       <InteractionMarkers />
       <IntroCamera />
       <PostFX />
+      <AdaptiveResolution />
     </>
   );
 }

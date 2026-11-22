@@ -10,6 +10,7 @@ import { DustField, HoloRing } from "@/world/environment/Effects";
 import { M } from "@/world/environment/materials";
 import { useQuality } from "@/lib/quality";
 import { Text } from "@/world/environment/Text3D";
+import { LimitedLights } from "@/world/environment/Lighting";
 
 function Globe() {
   const quality = useQuality();
@@ -189,9 +190,11 @@ export function NetworkOperations() {
       <DustField radius={14} height={9} count={Math.floor(quality.particles * 0.8)} opacity={0.3} />
 
       <ambientLight intensity={0.3} color="#a3c8da" />
+      <LimitedLights>
       <pointLight position={[0, 0.6, 0]} intensity={18} distance={12} color="#46e6ff" decay={2} />
       <pointLight position={[-10, 4.4, -7]} intensity={11} distance={16} color="#5aa8ff" decay={2} />
       <pointLight position={[10, 4.4, 7]} intensity={11} distance={16} color="#46e6ff" decay={2} />
+      </LimitedLights>
     </Sector>
   );
 }

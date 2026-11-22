@@ -13,6 +13,7 @@ import { HolographicCore } from "./HolographicCore";
 import { useQuality } from "@/lib/quality";
 import { useNexusStore } from "@/stores/nexusStore";
 import { Text } from "@/world/environment/Text3D";
+import { LimitedLights } from "@/world/environment/Lighting";
 
 function IdentityDisplay() {
   const scan = useRef<THREE.Mesh>(null);
@@ -200,9 +201,11 @@ export function Atrium() {
           shadow-bias={-0.0006}
         />
       )}
+      <LimitedLights>
       <pointLight position={[0, 4.2, 0]} intensity={26} distance={16} color="#46e6ff" decay={2} />
       <pointLight position={[-9, 7, 6]} intensity={12} distance={20} color="#f2a93b" decay={2} />
       <pointLight position={[9, 7, -6]} intensity={10} distance={20} color="#5aa8ff" decay={2} />
+      </LimitedLights>
     </group>
   );
 }

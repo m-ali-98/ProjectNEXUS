@@ -12,6 +12,7 @@ import { M } from "@/world/environment/materials";
 import { pipelineStages } from "@/content/infrastructure";
 import { useQuality } from "@/lib/quality";
 import { Text } from "@/world/environment/Text3D";
+import { LimitedLights } from "@/world/environment/Lighting";
 
 function Beacon() {
   const ref = useRef<THREE.Group>(null);
@@ -204,10 +205,12 @@ export function Infrastructure() {
 
       <ambientLight intensity={0.22} color="#a8b7c2" />
       <hemisphereLight args={["#2a2014", "#05070a", 0.35]} />
+      <LimitedLights>
       <pointLight position={[0, 4.2, -6]} intensity={30} distance={20} color="#f2a93b" decay={2} />
       <pointLight position={[0, 3.4, 6]} intensity={22} distance={18} color="#ffd7a0" decay={2} />
       <pointLight position={[-11, 3, -4]} intensity={10} distance={14} color="#46e6ff" decay={2} />
       <pointLight position={[11, 3, 4]} intensity={10} distance={14} color="#5aa8ff" decay={2} />
+      </LimitedLights>
     </Sector>
   );
 }

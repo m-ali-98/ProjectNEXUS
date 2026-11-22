@@ -11,6 +11,7 @@ import { M } from "@/world/environment/materials";
 import { useQuality } from "@/lib/quality";
 import { profile } from "@/content/profile";
 import { Text } from "@/world/environment/Text3D";
+import { LimitedLights } from "@/world/environment/Lighting";
 
 function TimelineWall() {
   const entries = profile.timeline;
@@ -287,9 +288,11 @@ export function PersonalQuarters() {
 
       <ambientLight intensity={0.42} color="#d6c8b4" />
       <hemisphereLight args={["#3a2c1e", "#080706", 0.4]} />
+      <LimitedLights>
       <pointLight position={[0, 4.2, -6]} intensity={16} distance={14} color="#f7c98a" decay={2} />
       <pointLight position={[-10, 3.4, 4]} intensity={10} distance={12} color="#ffd7a0" decay={2} />
       <pointLight position={[11, 3.4, 6]} intensity={10} distance={12} color="#f2a93b" decay={2} />
+      </LimitedLights>
     </Sector>
   );
 }

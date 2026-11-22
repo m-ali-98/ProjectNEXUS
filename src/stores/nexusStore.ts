@@ -47,6 +47,7 @@ export type Settings = {
   muted: boolean;
   showFps: boolean;
   subtitles: boolean;
+  adaptive: boolean;
 };
 
 const DEFAULT_SETTINGS: Settings = {
@@ -61,6 +62,7 @@ const DEFAULT_SETTINGS: Settings = {
   muted: false,
   showFps: false,
   subtitles: true,
+  adaptive: true,
 };
 
 export type Phase = "boot" | "intro" | "ready";
@@ -206,6 +208,15 @@ export const useNexusStore = create<NexusState>()(
     {
       name: "nexus-settings-v1",
       partialize: (state) => ({ settings: state.settings }),
+      // Persisted settings predate newer fields; merge over the defaults so an
+      // older record can never leave a control undefined.
+      merge: (persisted, current) => {
+        const saved = (persisted ?? {}) as { settings?: Partial<Settings> };
+        return {
+          ...current,
+          settings: { ...DEFAULT_SETTINGS, ...(saved.settings ?? {}) },
+        };
+      },
     },
   ),
 );

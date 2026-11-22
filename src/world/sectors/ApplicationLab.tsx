@@ -12,6 +12,7 @@ import { M } from "@/world/environment/materials";
 import { useQuality } from "@/lib/quality";
 import { ChatMockup } from "@/components/interface/ChatMockup";
 import { Text } from "@/world/environment/Text3D";
+import { LimitedLights } from "@/world/environment/Lighting";
 
 function FloatingPanel({
   position,
@@ -192,10 +193,12 @@ export function ApplicationLab() {
       <DustField radius={13} height={7.5} count={Math.floor(quality.particles * 0.7)} opacity={0.35} />
 
       <ambientLight intensity={0.4} color="#a7cede" />
+      <LimitedLights>
       <pointLight position={[0, 3.2, 2.4]} intensity={16} distance={12} color="#46e6ff" decay={2} />
       <pointLight position={[-10, 4.4, -4]} intensity={12} distance={16} color="#5aa8ff" decay={2} />
       <pointLight position={[10, 4.4, 4]} intensity={12} distance={16} color="#46e6ff" decay={2} />
       <pointLight position={[0, 4.2, -8]} intensity={9} distance={12} color="#e6f7ff" decay={2} />
+      </LimitedLights>
     </Sector>
   );
 }

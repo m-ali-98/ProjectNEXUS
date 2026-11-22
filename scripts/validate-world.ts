@@ -21,6 +21,8 @@ import {
   sectorPlacements,
 } from "../src/world/worldLayout";
 import { interactions, interactionsBySector } from "../src/world/interactions/registry";
+import { exhibitPose } from "../src/world/camera/framing";
+import { inspectPose } from "../src/world/camera/director";
 import { getProject } from "../src/content/projects";
 import { getSystemNode } from "../src/content/systems";
 import { pipelineStages, infraTerminals } from "../src/content/infrastructure";
@@ -33,7 +35,7 @@ const errors: string[] = [];
 const warnings: string[] = [];
 const note = (msg: string) => console.log(`  · ${msg}`);
 
-function penetrates(x: number, z: number, radius = PLAYER.radius) {
+function penetrates(x: number, z: number, radius: number = PLAYER.radius) {
   const probe = new THREE.Vector3(x, 0, z);
   const before = probe.clone();
   resolveCollisions(probe, radius, () => false);
@@ -98,6 +100,26 @@ for (const [sector, list] of Object.entries(interactionsBySector)) {
     }
   }
 }
+
+// --- 3b. panel framing -----------------------------------------------------
+// The camera parks 2.2 m in front of an exhibit while its panel is open. That
+// pose must stay inside the room and out of the furniture.
+console.log("panel framing");
+let framingAdjusted = 0;
+for (const item of interactions) {
+  if (!item.panel) continue;
+  // Approach from the room entry, i.e. the worst case a player can create.
+  const pose = exhibitPose(item.position.clone(), frameFor(item.sector).spawn);
+  if (pose.position.y < 0.5 || pose.position.y > 6.4) {
+    errors.push(`${item.id}: inspect camera at y=${pose.position.y.toFixed(2)} is outside head height range`);
+  }
+  if (penetrates(pose.position.x, pose.position.z, 0.25)) {
+    errors.push(`${item.id}: inspect camera is inside geometry at ${pose.position.x.toFixed(1)}, ${pose.position.z.toFixed(1)}`);
+  }
+  const ideal = inspectPose(item.position.clone(), frameFor(item.sector).spawn);
+  if (ideal.position.distanceTo(pose.position) > 0.2) framingAdjusted += 1;
+}
+note(`${framingAdjusted} exhibit poses were pulled back to stay clear of geometry`);
 
 // --- 4. panel payloads -----------------------------------------------------
 console.log("panel payloads");

@@ -13,6 +13,7 @@ import { systemNodes } from "@/content/systems";
 import { SYSTEM_NODE_RADIUS, systemNodeLocalPosition } from "@/world/sectorData";
 import { useQuality } from "@/lib/quality";
 import { Text } from "@/world/environment/Text3D";
+import { LimitedLights } from "@/world/environment/Lighting";
 
 const LAYER_COLOR: Record<string, string> = {
   client: "#46e6ff",
@@ -229,9 +230,11 @@ export function SystemsCore() {
       <DustField radius={14} height={9} count={400} accent="blue" opacity={0.32} />
 
       <ambientLight intensity={0.34} color="#9dc4dd" />
+      <LimitedLights>
       <pointLight position={[0, 2.4, 0]} intensity={22} distance={16} color="#5aa8ff" decay={2} />
       <pointLight position={[-11, 5, -8]} intensity={12} distance={18} color="#46e6ff" decay={2} />
       <pointLight position={[11, 5, 8]} intensity={10} distance={18} color="#f2a93b" decay={2} />
+      </LimitedLights>
     </Sector>
   );
 }

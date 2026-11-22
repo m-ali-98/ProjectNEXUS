@@ -157,6 +157,12 @@ export function SettingsPanel({ onBack }: { onBack?: () => void }) {
           onChange={(v) => update({ motion: v ? "reduced" : "full" })}
           hint="Disables head bob and ambient oscillation cues"
         />
+        <Toggle
+          label="Adaptive resolution"
+          value={settings.adaptive}
+          onChange={(v) => update({ adaptive: v })}
+          hint="Trades pixel ratio for frame rate to hold 60 FPS"
+        />
       </section>
 
       <section className="grid gap-3 sm:grid-cols-3">

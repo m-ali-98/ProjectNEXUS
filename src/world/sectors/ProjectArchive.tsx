@@ -11,6 +11,7 @@ import { M } from "@/world/environment/materials";
 import { projects } from "@/content/projects";
 import { useQuality } from "@/lib/quality";
 import { Text } from "@/world/environment/Text3D";
+import { LimitedLights } from "@/world/environment/Lighting";
 
 const POSITIONS: Record<string, [number, number]> = {
   "mission-001": [-9, -6],
@@ -167,9 +168,11 @@ export function ProjectArchive() {
       <DustField radius={16} height={11} count={Math.floor(quality.particles * 0.9)} opacity={0.32} />
 
       <ambientLight intensity={0.3} color="#b8ccd8" />
+      <LimitedLights>
       <pointLight position={[0, 4.4, -8]} intensity={10} distance={16} color="#46e6ff" decay={2} />
       <pointLight position={[0, 4.4, 9]} intensity={12} distance={16} color="#d8ecff" decay={2} />
       <pointLight position={[-12, 4, 0]} intensity={8} distance={14} color="#f2a93b" decay={2} />
+      </LimitedLights>
     </Sector>
   );
 }
