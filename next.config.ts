@@ -3,6 +3,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // The live-preview pane proxies this dev server from *.e2b.app, so its
+  // /_next/* requests arrive cross-origin; declare that origin explicitly.
+  allowedDevOrigins: ["*.e2b.app"],
   experimental: {
     optimizePackageImports: ["@react-three/drei", "framer-motion"],
   },
