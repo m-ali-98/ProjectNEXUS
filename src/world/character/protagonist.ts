@@ -349,3 +349,103 @@ export function prepareProtagonist(
 
   return { scene, mesh, material, walk, run, idle };
 }
+
+/* -------------------------------------------------------------------------- */
+/*                            procedural motion layer                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The asset's two clips animate the legs well and the arms barely at all, which
+ * reads as a zombie walk from the third-person boom — the view you spend the
+ * whole game in. Rather than retarget a foreign animation library onto a scanned
+ * skeleton (which folds arms and twists torsos), this layer adds the rotations
+ * the clips are missing, in *world* axes so it cannot fight the bone rolls:
+ * arm swing, elbow flex, shoulder counter-rotation and a little hip yaw.
+ *
+ * It runs after `mixer.update`, so it is additive on top of whatever the clips
+ * and their blend weights produced this frame.
+ */
+export type MotionRig = {
+  leftArm: THREE.Object3D;
+  rightArm: THREE.Object3D;
+  leftForeArm: THREE.Object3D;
+  rightForeArm: THREE.Object3D;
+  spine: THREE.Object3D;
+  spine01: THREE.Object3D;
+  hips: THREE.Object3D;
+};
+
+export function findMotionRig(scene: THREE.Object3D): MotionRig | null {
+  const byName = new Map<string, THREE.Object3D>();
+  scene.traverse((object) => {
+    if (object.name) byName.set(object.name, object);
+  });
+  const pick = (...names: string[]) => names.map((name) => byName.get(name)).find(Boolean);
+  const rig = {
+    leftArm: pick("LeftArm"),
+    rightArm: pick("RightArm"),
+    leftForeArm: pick("LeftForeArm"),
+    rightForeArm: pick("RightForeArm"),
+    spine: pick("Spine"),
+    spine01: pick("Spine01"),
+    hips: pick("Hips"),
+  };
+  if (Object.values(rig).some((joint) => !joint)) return null;
+  return rig as MotionRig;
+}
+
+const WORLD_X = new THREE.Vector3(1, 0, 0);
+const WORLD_Y = new THREE.Vector3(0, 1, 0);
+const tmpParent = new THREE.Quaternion();
+const tmpWorld = new THREE.Quaternion();
+const tmpDelta = new THREE.Quaternion();
+
+/** Rotates a bone about a world axis, keeping its parent chain authoritative. */
+function rotateInWorld(joint: THREE.Object3D, axis: THREE.Vector3, angle: number) {
+  if (Math.abs(angle) < 1e-4) return;
+  const parent = joint.parent;
+  if (!parent) return;
+  parent.updateWorldMatrix(true, false);
+  parent.getWorldQuaternion(tmpParent);
+  joint.getWorldQuaternion(tmpWorld);
+  tmpDelta.setFromAxisAngle(axis, angle);
+  tmpWorld.premultiply(tmpDelta);
+  joint.quaternion.copy(tmpParent.invert().multiply(tmpWorld));
+}
+
+/**
+ * @param phase radians through one full stride (2π = both feet back where they started)
+ * @param intensity 0 at rest, 1 at full walking pace
+ */
+export function applyMotionLayer(rig: MotionRig, phase: number, intensity: number) {
+  const swing = Math.sin(phase);
+  const amount = THREE.MathUtils.clamp(intensity, 0, 1);
+
+  // Legs lead, arms follow: left arm swings with the right leg.
+  rotateInWorld(rig.leftArm, WORLD_X, -swing * 0.42 * amount);
+  rotateInWorld(rig.rightArm, WORLD_X, swing * 0.42 * amount);
+
+  // A straight arm swinging looks like a hinge; the elbow carries the swing.
+  rotateInWorld(rig.leftForeArm, WORLD_X, (-0.16 - Math.max(0, -swing) * 0.34) * amount);
+  rotateInWorld(rig.rightForeArm, WORLD_X, (-0.16 - Math.max(0, swing) * 0.34) * amount);
+
+  // Shoulders counter-rotate against the hips, which is what sells a walk.
+  rotateInWorld(rig.spine, WORLD_Y, swing * 0.07 * amount);
+  rotateInWorld(rig.spine01, WORLD_Y, swing * 0.05 * amount);
+  rotateInWorld(rig.hips, WORLD_Y, -swing * 0.06 * amount);
+}
+
+/**
+ * Breathing and a slow weight shift, so standing still is not a frozen frame.
+ * `time` is seconds since mount.
+ */
+export function applyIdleLayer(rig: MotionRig, time: number, weight: number) {
+  if (weight <= 0.001) return;
+  const breath = Math.sin(time * 1.5) * 0.012 * weight;
+  const shift = Math.sin(time * 0.42) * 0.02 * weight;
+  rotateInWorld(rig.spine01, WORLD_X, -breath);
+  rotateInWorld(rig.spine, WORLD_Y, shift);
+  rotateInWorld(rig.hips, WORLD_Y, -shift * 0.6);
+  rotateInWorld(rig.leftArm, WORLD_X, -shift * 0.8);
+  rotateInWorld(rig.rightArm, WORLD_X, -shift * 0.8);
+}

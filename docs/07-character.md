@@ -77,6 +77,22 @@ a blend never restarts a clip mid-stride:
 Weights are additionally smoothed at 9/s, and the mixer slows to 15 % while airborne with
 the pose held just off idle, plus a small forward lean.
 
+### The motion layer
+
+The asset's two clips animate the legs well and the arms barely at all, and the arms are
+what you look at from the third-person boom. Retargeting a foreign animation library onto a
+scanned skeleton was tried: the rigs rest in different poses (T versus arms-down), so a
+rotation delta folds her arms across her chest, and a direction-matching retarget leaves
+torso twist artifacts. Both are visible in `preview-model/alt/` history but neither was good
+enough to ship.
+
+Instead `applyMotionLayer()` adds the rotations the clips are missing, after
+`mixer.update()`, in **world axes** so it cannot fight the bone rolls: arm swing
+(±0.42 rad), elbow flex that carries the swing, shoulder counter-rotation against the hips,
+and a little hip yaw. Its phase is read from whichever clip is carrying the stride, so the
+arms stay locked to the feet. `applyIdleLayer()` keeps standing still from being a frozen
+frame with breathing and a slow weight shift. Both scale with the reduced-motion setting.
+
 **Grounding.** Every clip floats the soles a little: measured over the full cycle, `walk`
 sits 21–33 mm high and `run` bottoms out at 11 mm. The component applies a per-clip offset
 (`PROTAGONIST.ground`, blended with the same weights as the clips) and the validator

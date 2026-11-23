@@ -5,7 +5,14 @@ import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
-import { PROTAGONIST, prepareProtagonist, type ProtagonistRig as Rig } from "./protagonist";
+import {
+  PROTAGONIST,
+  applyIdleLayer,
+  applyMotionLayer,
+  findMotionRig,
+  prepareProtagonist,
+  type ProtagonistRig as Rig,
+} from "./protagonist";
 import { playerState } from "@/world/player/playerState";
 import { useNexusStore } from "@/stores/nexusStore";
 import { useQuality } from "@/lib/quality";
@@ -106,6 +113,7 @@ function ProtagonistRig({ rig }: { rig: Rig }) {
     actions.idle.setEffectiveWeight(1);
   }, [actions]);
 
+  const motionRig = useMemo(() => findMotionRig(rig.scene), [rig]);
   const ground = useRef(PROTAGONIST.ground.idle);
   const lean = useRef(0);
   const blends = useRef<Blends>({ idle: 1, walk: 0, run: 0 });
@@ -160,10 +168,14 @@ function ProtagonistRig({ rig }: { rig: Rig }) {
     rig.scene.rotation.x = lean.current;
     rig.scene.rotation.y = 0;
 
-    // Breathing: a small additive offset applied after the mixer writes the pose.
-    const spine = rig.mesh.skeleton.bones.find((bone) => /^spine01$/i.test(bone.name));
-    if (spine) {
-      spine.rotation.x += Math.sin(state.clock.elapsedTime * 1.6) * 0.012 * motion;
+    // The clips animate the legs and leave the arms hanging, so the swing is
+    // added on top, phase-locked to whichever clip is carrying the stride.
+    if (motionRig) {
+      const walkPhase = actions.walk.time / rig.walk.duration;
+      const runPhase = actions.run.time / rig.run.duration;
+      const phase = (walkPhase * (1 - blends.current.run) + runPhase * blends.current.run) * Math.PI * 2;
+      applyMotionLayer(motionRig, phase, moveBlend * motion);
+      applyIdleLayer(motionRig, state.clock.elapsedTime, blends.current.idle * motion);
     }
   });
 

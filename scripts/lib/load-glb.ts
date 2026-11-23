@@ -83,7 +83,11 @@ function decodeBaseColour(buffer: Buffer, THREE: typeof import("three")) {
   const view = json.bufferViews[image.bufferView];
   const start = 20 + jsonLength + 8 + (view.byteOffset ?? 0);
   const bytes = buffer.subarray(start, start + view.byteLength);
-  // The pipeline keeps base colour as JPEG; PNG would need a decoder too.
+  if (image.mimeType === "image/png" || (bytes[0] === 0x89 && bytes[1] === 0x50)) {
+    const png = require("pngjs") as typeof import("pngjs");
+    const decoded = png.PNG.sync.read(Buffer.from(bytes));
+    return { width: decoded.width, height: decoded.height, data: new Uint8Array(decoded.data) };
+  }
   const jpeg = require("jpeg-js") as typeof import("jpeg-js");
   return jpeg.decode(bytes, { useTArray: true });
 }
